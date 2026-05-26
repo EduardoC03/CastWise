@@ -21,11 +21,14 @@ A knowledgeable Washington fishing assistant working with the Washington Departm
 
 ## Documentation
 
-- `MAP_DOCUMENTATION.md`: Details on the May 2026 map interactivity and realism updates.
+- `CODEBASE_GUIDE.md`: Detailed guide for teammates on how to modify the app using AI tools.
 
 ## Project Structure
 
-- `src/App.jsx`: Main application component and data.
-- `src/main.jsx`: Entry point with `window.storage` mock.
-- `index.html`: Main HTML file.
+- `src/App.jsx`: Main shell and state management.
+- `src/components/`: Reusable React components.
+- `src/data/`: Centralized site data and metadata.
+- `src/utils/`: AI and storage utility functions.
+- `src/main.jsx`: Entry point mounting the React app.
+- `index.html`: Main HTML entry point.
 
