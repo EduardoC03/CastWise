@@ -19,6 +19,10 @@ A knowledgeable Washington fishing assistant working with the Washington Departm
    npm run build
    ```
 
+## Documentation
+
+- `MAP_DOCUMENTATION.md`: Details on the May 2026 map interactivity and realism updates.
+
 ## Project Structure
 
 - `src/App.jsx`: Main application component and data.
