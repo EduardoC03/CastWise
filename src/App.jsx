@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BookOpen } from 'lucide-react';
 import './App.css';
 
 // Components
@@ -15,6 +16,7 @@ import CatchLog from './components/CatchLog';
 // Utilities & Data
 import { loadProfile, saveProfile, loadTrip, saveTrip, clearAllStorage } from './utils/storage';
 import { SITES } from './data/sites';
+import { getRecommendations } from './utils/ranking';
 
 const PROFILE_KEY = 'castwise_profile';
 const THEME_KEY = 'castwise_theme';
@@ -24,7 +26,7 @@ export default function CastWise() {
   const [profile, setProfile] = useState(null);
   const [trip, setTrip] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'dark');
-  const [activeSection, setActiveSection] = useState('map');
+  const [activeSection, setActiveSection] = useState('rankings'); // land on rankings, not map
   const [selectedSite, setSelectedSite] = useState(null);
   const [isSiteView, setIsSiteView] = useState(false);
 
@@ -57,7 +59,7 @@ export default function CastWise() {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
     setProfile(p);
     setAppState('dashboard');
-    setActiveSection('map');
+    setActiveSection('rankings');
   };
 
   const handleResetProfile = () => {
@@ -85,7 +87,7 @@ export default function CastWise() {
     await saveTrip(null);
     setTrip(null);
     if (activeSection === 'briefing') {
-      setActiveSection('map');
+      setActiveSection('rankings');
     }
   };
 
@@ -94,6 +96,11 @@ export default function CastWise() {
   if (appState === 'onboarding') {
     return <Onboarding onComplete={handleOnboardingComplete} />;
   }
+
+  // Compute the user's #1 pick once, here, so the Sidebar can show it.
+  const topPick = profile
+    ? getRecommendations(profile, SITES).top[0]?.site
+    : null;
 
   const renderMainContent = () => {
     if (isSiteView && selectedSite) {
@@ -111,13 +118,20 @@ export default function CastWise() {
       case 'map':
         return <MapTab onSelect={handleSelectSite} />;
       case 'rankings':
-        return <SiteRanking />;
+        return (
+          <SiteRanking
+            profile={profile}
+            trip={trip}
+            onSelect={handleSelectSite}
+            onAddToTrip={handleAddToTrip}
+          />
+        );
       case 'briefing':
         return trip ? (
           <TripBriefing
             profile={profile}
             trip={trip}
-            onBack={() => setActiveSection('map')}
+            onBack={() => setActiveSection('rankings')}
             onRemove={handleRemoveTrip}
           />
         ) : (
@@ -126,12 +140,14 @@ export default function CastWise() {
               <BookOpen size={48} />
             </div>
             <h2 className="text-3xl font-bold text-[var(--text-primary)] mb-2">No Trip Planned</h2>
-            <p className="text-[var(--text-muted)] max-w-md mb-8">Select a fishing site from the map to generate a personalized trip briefing with gear and tactics.</p>
-            <button 
-              className="px-8 py-3 bg-[var(--primary-accent)] text-[var(--bg-color)] font-bold rounded-xl hover:scale-105 transition-transform" 
-              onClick={() => setActiveSection('map')}
+            <p className="text-[var(--text-muted)] max-w-md mb-8">
+              Pick a site from your recommendations to generate a personalized trip briefing with gear and tactics.
+            </p>
+            <button
+              className="px-8 py-3 bg-[var(--primary-accent)] text-[var(--bg-color)] font-bold rounded-xl hover:scale-105 transition-transform"
+              onClick={() => setActiveSection('rankings')}
             >
-              Go to Map
+              See recommendations
             </button>
           </div>
         );
@@ -140,28 +156,35 @@ export default function CastWise() {
       case 'profile':
         return <AnglerProfile profile={profile} onReset={handleResetProfile} />;
       default:
-        return <MapTab onSelect={handleSelectSite} />;
+        return (
+          <SiteRanking
+            profile={profile}
+            trip={trip}
+            onSelect={handleSelectSite}
+            onAddToTrip={handleAddToTrip}
+          />
+        );
     }
   };
 
   return (
     <div className="flex flex-col h-screen bg-[var(--bg-color)] text-[var(--text-primary)] transition-colors overflow-hidden">
-      <NavBar 
-        activeSection={isSiteView ? 'map' : activeSection} 
-        onSectionChange={(section) => { setActiveSection(section); setIsSiteView(false); }} 
+      <NavBar
+        activeSection={isSiteView ? 'rankings' : activeSection}
+        onSectionChange={(section) => { setActiveSection(section); setIsSiteView(false); }}
         theme={theme}
         onToggleTheme={toggleTheme}
         profile={profile}
         onResetProfile={handleResetProfile}
       />
-      
+
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar 
-          profile={profile} 
-          topSite={SITES[0]} 
-          onNavigate={(section) => { setActiveSection(section); setIsSiteView(false); }} 
+        <Sidebar
+          profile={profile}
+          topSite={topPick}
+          onNavigate={(section) => { setActiveSection(section); setIsSiteView(false); }}
         />
-        
+
         <main className="flex-1 relative overflow-y-auto bg-[var(--bg-color)] animate-in fade-in duration-500">
           {renderMainContent()}
         </main>
