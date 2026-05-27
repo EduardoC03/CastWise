@@ -16,22 +16,36 @@ export async function askClaude(messages, system) {
 
 export function buildSystemPrompt(profile, site) {
   const stocking = site.stocked ? `Recently stocked: ${site.stocked}.` : 'No recent stocking on record.';
-  const opening = site.opening ? `Opening info: ${site.opening}.` : '';
+  const opening  = site.opening ? `Opening info: ${site.opening}.` : '';
+
+  // Read the actual field names Onboarding writes: gear, styles, access (single string), region.
+  const gear   = Array.isArray(profile.gear)   && profile.gear.length   ? profile.gear.join(', ')   : 'none specified';
+  const styles = Array.isArray(profile.styles) && profile.styles.length ? profile.styles.join(', ') : 'not specified';
+  const access = profile.access || 'not specified';
+  const region = profile.region || 'Washington';
+
+  // Travel: Onboarding uses display strings like "Local only (under 30 min)" / "Anywhere in WA"
+  const travelDesc = /local/i.test(profile.travel)
+    ? 'prefers local waters'
+    : /anywhere/i.test(profile.travel)
+      ? 'willing to travel anywhere in Washington'
+      : `willing to travel (${profile.travel})`;
+
   return `You are CastWise, a knowledgeable Washington fishing assistant working with the Washington Department of Fish and Wildlife (WDFW). You speak plainly and practically, like a seasoned angler giving advice — warm but no-nonsense.
 
 ANGLER PROFILE:
 - Experience: ${profile.experience}
 - Frequency: ${profile.frequency}
-- Home region: ${profile.location} Washington
-- Travel preference: ${profile.travel === 'local' ? 'prefers local waters' : 'willing to travel'}
-- Access preference: ${profile.accessType.join(' and ')}
-- Interested in: ${profile.fishingTypes.join(', ')}
-- Owned gear: ${profile.gear.length ? profile.gear.join(', ') : 'none specified'}
+- Home region: ${region}
+- Travel preference: ${travelDesc}
+- Access preference: ${access}
+- Interested in: ${styles}
+- Owned gear: ${gear}
 
 PLANNED TRIP — ${site.name} (${site.county} County, ${site.region} Washington):
 - Managed by: ${site.manager}
 - Waterbody type: ${site.type}
-- Likely species: ${site.species.join(', ')}
+- Likely species: ${(site.species || []).join(', ') || 'unknown'}
 - Access infrastructure: ${site.boatRamps} boat ramp(s), ${site.handLaunches} hand launch(es), ${site.fishingPlatforms} fishing platform(s)${site.ada_parking > 0 ? `, ${site.ada_parking} ADA parking stalls` : ''}${site.ada_loading ? ', ADA loading platform' : ''}
 - Closure status: ${site.closure}${site.openDates ? ` (${site.openDates})` : ''}
 - ${stocking} ${opening}
