@@ -1,48 +1,48 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronRight, ChevronLeft, Check, Fish, Sparkles } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Check, Fish } from 'lucide-react';
 
 const SLIDES = [
   { id: 'welcome', type: 'welcome' },
   { id: 'name', type: 'input', heading: 'First, what should we call you?', placeholder: 'Your first name' },
-  { 
-    id: 'experience', 
-    type: 'choice', 
+  {
+    id: 'experience',
+    type: 'choice',
     heading: 'How would you describe your fishing experience?',
     options: ['Beginner', 'Intermediate', 'Advanced']
   },
-  { 
-    id: 'frequency', 
-    type: 'choice', 
+  {
+    id: 'frequency',
+    type: 'choice',
     heading: 'How often do you fish?',
     options: ['A few times a year', 'Monthly', 'Weekly', 'Almost daily']
   },
-  { 
-    id: 'gear', 
-    type: 'multi', 
+  {
+    id: 'gear',
+    type: 'multi',
     heading: 'What gear do you own?',
     options: ['Spinning rod', 'Fly rod', 'Bait rod', 'Waders', 'Boat', 'Electronics']
   },
-  { 
-    id: 'styles', 
-    type: 'multi', 
+  {
+    id: 'styles',
+    type: 'multi',
     heading: 'What fishing styles do you prefer?',
     options: ['Spin fishing', 'Fly fishing', 'Bait fishing', 'Trolling', 'Ice fishing']
   },
-  { 
-    id: 'region', 
-    type: 'choice', 
+  {
+    id: 'region',
+    type: 'choice',
     heading: 'Where in Washington are you based?',
     options: ['Northwest WA', 'Southwest WA', 'Central WA', 'Eastern WA']
   },
-  { 
-    id: 'travel', 
-    type: 'choice', 
+  {
+    id: 'travel',
+    type: 'choice',
     heading: 'How far are you willing to travel to fish?',
     options: ['Local only (under 30 min)', 'Up to 1 hour', 'Up to 2 hours', 'Anywhere in WA']
   },
-  { 
-    id: 'access', 
-    type: 'choice', 
+  {
+    id: 'access',
+    type: 'choice',
     heading: 'How do you prefer to access the water?',
     options: ['Bank fishing', 'Wade fishing', 'Boat / kayak']
   },
@@ -55,7 +55,6 @@ export default function Onboarding({ onComplete }) {
     name: '', experience: '', frequency: '', gear: [], styles: [],
     region: '', travel: '', access: ''
   });
-  const [isExiting, setIsExiting] = useState(false);
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -64,21 +63,16 @@ export default function Onboarding({ onComplete }) {
     }
   }, [currentStep]);
 
-  const handleNext = (overrideValue) => {
+  const handleNext = () => {
     if (currentStep === SLIDES.length - 1) {
       onComplete({ ...answers, completedAt: new Date().toISOString() });
       return;
     }
-
-    const nextStep = () => {
-      setCurrentStep(prev => prev + 1);
-      setIsExiting(false);
-    };
-
+    const advance = () => setCurrentStep(prev => prev + 1);
     if (SLIDES[currentStep].type === 'choice') {
-      setTimeout(nextStep, 300);
+      setTimeout(advance, 280);
     } else {
-      nextStep();
+      advance();
     }
   };
 
@@ -90,8 +84,8 @@ export default function Onboarding({ onComplete }) {
     const slide = SLIDES[currentStep];
     if (slide.type === 'multi') {
       const current = answers[slide.id] || [];
-      const updated = current.includes(val) 
-        ? current.filter(item => item !== val) 
+      const updated = current.includes(val)
+        ? current.filter(item => item !== val)
         : [...current, val];
       setAnswers({ ...answers, [slide.id]: updated });
     } else if (slide.type === 'choice') {
@@ -101,13 +95,14 @@ export default function Onboarding({ onComplete }) {
   };
 
   const currentSlide = SLIDES[currentStep];
-  const progress = ((currentStep) / (SLIDES.length - 1)) * 100;
+  const progress = (currentStep / (SLIDES.length - 1)) * 100;
+  const isMultiGrid = currentSlide.options && currentSlide.options.length > 3;
 
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Enter') {
         if (currentSlide.type === 'input' && answers.name.trim()) handleNext();
-        if (currentSlide.type === 'multi' && answers[currentSlide.id].length) handleNext();
+        if (currentSlide.type === 'multi' && (answers[currentSlide.id] || []).length) handleNext();
         if (currentSlide.type === 'welcome') handleNext();
         if (currentSlide.type === 'completion') handleNext();
       }
@@ -117,141 +112,187 @@ export default function Onboarding({ onComplete }) {
   }, [currentStep, answers]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[var(--bg-color)] overflow-hidden">
-      {/* Wave Background Animation Placeholder */}
-      <div className="absolute inset-0 opacity-10 pointer-events-none">
-        <div className="absolute inset-0 bg-gradient-to-b from-[var(--primary-accent)] to-transparent animate-pulse" />
-      </div>
-
+    <div className="cw-ob-shell">
+      {/* Progress bar */}
       {currentStep > 0 && currentStep < SLIDES.length - 1 && (
-        <div className="absolute top-0 left-0 w-full h-1 bg-[var(--surface-color)]">
-          <div 
-            className="h-full bg-[var(--primary-accent)] transition-all duration-500 ease-out"
-            style={{ width: `${progress}%` }}
-          />
+        <div className="cw-ob-progress">
+          <div className="cw-ob-progress-bar" style={{ width: `${progress}%` }} />
         </div>
       )}
 
+      {/* Back button */}
       {currentStep > 0 && currentStep < SLIDES.length - 1 && (
-        <button 
-          onClick={handleBack}
-          className="absolute top-8 left-8 flex items-center gap-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-        >
-          <ChevronLeft size={20} />
-          <span className="text-sm font-medium uppercase tracking-widest">Back</span>
+        <button className="cw-ob-back" onClick={handleBack}>
+          <ChevronLeft size={14} /> Back
         </button>
       )}
 
-      <div className="w-full max-w-2xl px-6 py-12 flex flex-col items-center">
+      <div className="cw-ob-content">
+
+        {/* ── Welcome ── */}
         {currentSlide.type === 'welcome' && (
-          <div className="text-center animate-in fade-in zoom-in duration-700">
-            <div className="flex justify-center mb-6">
-              <div className="p-6 bg-[var(--surface-color)] rounded-full border-2 border-[var(--primary-accent)] shadow-[0_0_30px_rgba(212,160,23,0.2)]">
-                <Fish size={64} className="text-[var(--primary-accent)]" />
+          <div style={{ textAlign: 'center' }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              marginBottom: 28,
+            }}>
+              <div style={{
+                width: 88, height: 88,
+                borderRadius: '50%',
+                background: 'var(--gold-dim)',
+                border: '2px solid var(--gold)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 0 32px rgba(212,160,23,0.2)',
+              }}>
+                <Fish size={40} style={{ color: 'var(--gold)' }} />
               </div>
             </div>
-            <h1 className="text-6xl font-black text-[var(--text-primary)] mb-2 tracking-tighter">
-              Cast<span className="text-[var(--primary-accent)]">Wise</span>
+            <h1 style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 56,
+              fontWeight: 700,
+              color: 'var(--text)',
+              letterSpacing: '-0.03em',
+              lineHeight: 1,
+              marginBottom: 10,
+            }}>
+              Cast<em style={{ color: 'var(--gold)', fontStyle: 'italic' }}>Wise</em>
             </h1>
-            <p className="text-xl text-[var(--text-muted)] italic mb-12">"Fish smarter, not harder."</p>
-            <button 
+            <p style={{
+              fontFamily: 'var(--font-display)',
+              fontStyle: 'italic',
+              fontSize: 16,
+              color: 'var(--text-3)',
+              marginBottom: 40,
+            }}>
+              "Fish smarter, not harder."
+            </p>
+            <button
               onClick={handleNext}
-              className="px-12 py-4 bg-[var(--primary-accent)] text-[var(--bg-color)] text-lg font-bold rounded-full hover:scale-105 transition-transform shadow-lg"
+              className="cw-btn cw-btn-primary"
+              style={{ padding: '14px 40px', fontSize: 15, borderRadius: 99 }}
             >
               Get Started
             </button>
           </div>
         )}
 
+        {/* ── Name input ── */}
         {currentSlide.type === 'input' && (
-          <div className="w-full animate-in slide-in-from-right duration-400">
-            <h2 className="text-4xl font-bold text-[var(--text-primary)] mb-10 text-center tracking-tight">
-              {currentSlide.heading}
-            </h2>
+          <div style={{ width: '100%' }}>
+            <h2 className="cw-ob-question">{currentSlide.heading}</h2>
             <input
               ref={inputRef}
               type="text"
               value={answers.name}
-              onChange={(e) => setAnswers({ ...answers, name: e.target.value })}
+              onChange={e => setAnswers({ ...answers, name: e.target.value })}
               placeholder={currentSlide.placeholder}
-              className="w-full bg-transparent border-b-2 border-[var(--border-color)] text-4xl text-center py-4 text-[var(--primary-accent)] focus:border-[var(--primary-accent)] outline-none transition-colors"
+              className="cw-ob-name-input"
             />
-            <div className="flex justify-center mt-12">
-              <button 
+            <div className="cw-ob-continue">
+              <button
                 disabled={!answers.name.trim()}
                 onClick={handleNext}
-                className="px-10 py-3 bg-[var(--surface-color)] text-[var(--text-primary)] font-bold rounded-lg border border-[var(--border-color)] hover:border-[var(--primary-accent)] disabled:opacity-50 transition-all flex items-center gap-2"
+                className="cw-btn cw-btn-ghost"
+                style={{ gap: 8 }}
               >
-                Continue <ChevronRight size={18} />
+                Continue <ChevronRight size={16} />
               </button>
             </div>
           </div>
         )}
 
+        {/* ── Choice / Multi ── */}
         {(currentSlide.type === 'choice' || currentSlide.type === 'multi') && (
-          <div className="w-full animate-in slide-in-from-right duration-400">
-            <div className="text-center mb-4">
-              <span className="text-xs font-bold text-[var(--primary-accent)] uppercase tracking-[0.2em]">
-                Step {currentStep - 1} of 7
-              </span>
-            </div>
-            <h2 className="text-4xl font-bold text-[var(--text-primary)] mb-12 text-center tracking-tight leading-tight">
-              {currentSlide.heading}
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div style={{ width: '100%' }}>
+            <div className="cw-ob-step-lbl">Step {currentStep - 1} of 7</div>
+            <h2 className="cw-ob-question">{currentSlide.heading}</h2>
+            <div className={`cw-ob-options ${isMultiGrid ? 'grid-2' : ''}`}>
               {currentSlide.options.map(opt => {
-                const isSelected = currentSlide.type === 'multi' 
-                  ? answers[currentSlide.id].includes(opt)
+                const isSelected = currentSlide.type === 'multi'
+                  ? (answers[currentSlide.id] || []).includes(opt)
                   : answers[currentSlide.id] === opt;
                 return (
                   <button
                     key={opt}
                     onClick={() => handleSelect(opt)}
-                    className={`p-6 text-lg font-bold rounded-xl border-2 text-left transition-all hover:scale-[1.02] active:scale-[0.98] flex justify-between items-center ${
-                      isSelected 
-                        ? 'bg-[var(--primary-accent)] border-[var(--primary-accent)] text-[var(--bg-color)] shadow-lg' 
-                        : 'bg-[var(--surface-color)] border-[var(--border-color)] text-[var(--text-primary)] hover:border-[var(--primary-accent)]'
-                    }`}
+                    className={`cw-ob-option ${isSelected ? 'selected' : ''}`}
                   >
-                    {opt}
-                    {isSelected && <Check size={20} />}
+                    <span>{opt}</span>
+                    <span className="cw-ob-option-check">
+                      {isSelected && <Check size={11} />}
+                    </span>
                   </button>
                 );
               })}
             </div>
             {currentSlide.type === 'multi' && (
-              <div className="flex justify-center mt-12">
-                <button 
-                  disabled={!answers[currentSlide.id].length}
+              <div className="cw-ob-continue">
+                <button
+                  disabled={!(answers[currentSlide.id] || []).length}
                   onClick={handleNext}
-                  className="px-10 py-3 bg-[var(--surface-color)] text-[var(--text-primary)] font-bold rounded-lg border border-[var(--border-color)] hover:border-[var(--primary-accent)] disabled:opacity-50 transition-all flex items-center gap-2"
+                  className="cw-btn cw-btn-ghost"
+                  style={{ gap: 8 }}
                 >
-                  Continue <ChevronRight size={18} />
+                  Continue <ChevronRight size={16} />
                 </button>
               </div>
             )}
           </div>
         )}
 
+        {/* ── Completion ── */}
         {currentSlide.type === 'completion' && (
-          <div className="text-center animate-in zoom-in duration-700">
-            <div className="flex justify-center mb-8">
-              <div className="p-8 bg-green-500/20 rounded-full border-4 border-green-500 animate-bounce">
-                <Check size={64} className="text-green-500" />
+          <div style={{ textAlign: 'center' }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              marginBottom: 28,
+            }}>
+              <div style={{
+                width: 88, height: 88,
+                borderRadius: '50%',
+                background: 'rgba(90,173,102,0.12)',
+                border: '2px solid #5aad66',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <Check size={40} style={{ color: '#5aad66' }} />
               </div>
             </div>
-            <h2 className="text-5xl font-black text-[var(--text-primary)] mb-4 tracking-tighter">
+            <h2 style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 36,
+              fontWeight: 700,
+              color: 'var(--text)',
+              letterSpacing: '-0.02em',
+              marginBottom: 10,
+            }}>
               You're all set, {answers.name}!
             </h2>
-            <p className="text-xl text-[var(--text-muted)] mb-12">Your personalized dashboard is ready.</p>
-            <button 
+            <p style={{
+              fontFamily: 'var(--font-display)',
+              fontStyle: 'italic',
+              fontSize: 15,
+              color: 'var(--text-3)',
+              marginBottom: 36,
+            }}>
+              Your personalized dashboard is ready.
+            </p>
+            <button
               onClick={handleNext}
-              className="px-12 py-4 bg-[var(--primary-accent)] text-[var(--bg-color)] text-lg font-bold rounded-full hover:scale-105 transition-transform shadow-lg flex items-center gap-3 mx-auto"
+              className="cw-btn cw-btn-primary"
+              style={{ padding: '14px 40px', fontSize: 15, borderRadius: 99, margin: '0 auto', display: 'inline-flex', gap: 10 }}
             >
-              Go to my dashboard <ChevronRight size={20} />
+              Go to my dashboard <ChevronRight size={18} />
             </button>
           </div>
         )}
+
       </div>
     </div>
   );
