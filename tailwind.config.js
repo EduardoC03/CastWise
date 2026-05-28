@@ -7,15 +7,18 @@ export default {
   theme: {
     extend: {
       colors: {
-        'deep-lake': '#0A2342',
-        'moss': '#3E5622',
-        'amber': '#D8973C',
-        'cream': '#F4F1DE',
-        'earth': '#2B2D42',
+        gold:    '#d4a017',
+        'gold-soft': '#e8b84b',
+        green:   '#4a7c59',
+        'green-bright': '#5aad6f',
+        bg:      '#0d1a10',
+        surface: '#1a2e1f',
       },
       fontFamily: {
-        display: ['Bebas Neue', 'sans-serif'],
-        body: ['Outfit', 'sans-serif'],
+        // These names match the CSS variables in index.css
+        display: ['Playfair Display', 'Georgia', 'serif'],
+        sans:    ['DM Sans', 'system-ui', 'sans-serif'],
+        mono:    ['DM Mono', 'Fira Mono', 'monospace'],
       },
     },
   },
