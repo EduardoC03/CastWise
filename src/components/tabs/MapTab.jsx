@@ -123,7 +123,7 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
   const [geoData, setGeoData] = useState({ type: 'FeatureCollection', features: [] })
   const [loading, setLoading] = useState(false)
   const [wdfwWaterNames, setWdfwWaterNames] = useState(new Set())
-  const [loadedTiles, setLoadedTiles] = useState(new Set())
+  const loadedTilesRef = useRef(new Set())
   const [selectedFeature, setSelectedFeature] = useState(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [filters, setFilters] = useState({
@@ -141,6 +141,8 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
   const debounceTimer = useRef(null)
   // Holds the currently highlighted Leaflet layers so we can un-highlight them directly
   const activeLayersRef = useRef([])
+  // Ref to the Leaflet GeoJSON layer group — needed to iterate feature layers on click
+  const geoJsonLayerRef = useRef(null)
   const currentMonth = new Date().getMonth()
 
   // Fetch WDFW Access Sites
@@ -199,13 +201,11 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
 
   const fetchWaterbodies = useCallback(async (bounds) => {
     const tilesInView = getTilesInView(bounds)
-    const newTiles = tilesInView.filter(t => !loadedTiles.has(t))
+    const newTiles = tilesInView.filter(t => !loadedTilesRef.current.has(t))
     if (newTiles.length === 0) return
 
     setLoading(true)
-    const updatedTiles = new Set(loadedTiles)
-    newTiles.forEach(t => updatedTiles.add(t))
-    setLoadedTiles(updatedTiles)
+    newTiles.forEach(t => loadedTilesRef.current.add(t))
 
     const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`
     // Use `out geom` instead of `>; out skel qt` — returns geometry inline, no second round-trip for nodes
@@ -251,7 +251,7 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
     } finally {
       setLoading(false)
     }
-  }, [loadedTiles, isWDFWWaterway])
+  }, [isWDFWWaterway])
 
   const handleMoveEnd = useCallback((bounds, zoom) => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current)
@@ -281,6 +281,12 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
 
 
 
+  const handleMapClick = useCallback(() => {
+    activeLayersRef.current.forEach(l => l.setStyle(getBaseStyle(l.feature)))
+    activeLayersRef.current = []
+    setSelectedWaterbody(null)
+  }, [])
+
   return (
     <div className="w-full h-full min-h-[500px] relative bg-[var(--bg-color)] overflow-hidden font-sans">
       <MapContainer 
@@ -295,50 +301,57 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
         />
         
         <MapController onMoveEnd={handleMoveEnd} onReady={onMapReady} />
-        <MapClickHandler onMapClick={() => {
-          activeLayersRef.current.forEach(l => l.setStyle(getBaseStyle(l.feature)))
-          activeLayersRef.current = []
-          setSelectedWaterbody(null)
-        }} />
+        <MapClickHandler onMapClick={handleMapClick} />
 
         {filteredGeoData && filteredGeoData.features?.length > 0 && (
           <GeoJSON 
             key={`geo-${filteredGeoData.features.length}-${filters.lakes}-${filters.rivers}-${filters.marine}`}
+            ref={geoJsonLayerRef}
             data={filteredGeoData} 
             style={getBaseStyle}
             onEachFeature={(f, l) => {
+              // Re-apply highlight immediately if this feature was selected before remount
+              const fname = f.properties.name || null
+              if (fname && selectedWaterbodyRef.current === fname) {
+                const p = f.properties
+                const isRiver = p.waterway === 'river' || p.waterway === 'stream' || p.waterway === 'canal'
+                l.setStyle(isRiver ? SELECTED_STYLE_RIVER : SELECTED_STYLE_FILL)
+                if (!activeLayersRef.current.includes(l)) activeLayersRef.current.push(l)
+              }
               l.on({
                 mouseover: (e) => {
-                  const isSelected = selectedWaterbodyRef.current === (f.properties.name || null)
+                  const isSelected = selectedWaterbodyRef.current === fname
                   if (!isSelected) {
                     const base = getBaseStyle(f)
                     e.target.setStyle({ fillOpacity: (base.fillOpacity || 0) + 0.2, weight: (base.weight || 2) + 1 })
                   }
                 },
                 mouseout: (e) => {
-                  const isSelected = selectedWaterbodyRef.current === (f.properties.name || null)
+                  const isSelected = selectedWaterbodyRef.current === fname
                   if (!isSelected) e.target.setStyle(getBaseStyle(f))
                 },
                 click: (e) => {
                   L.DomEvent.stopPropagation(e)
-                  const clickedName = f.properties.name || null
+                  const clickedName = fname
                   const isTogglingOff = selectedWaterbodyRef.current === clickedName
 
-                  // Un-highlight previously selected layers immediately
+                  // Un-highlight previously selected layers
                   activeLayersRef.current.forEach(prev => prev.setStyle(getBaseStyle(prev.feature)))
                   activeLayersRef.current = []
 
                   if (!isTogglingOff) {
-                    // Highlight all layers that share this name (multi-part waterbodies)
+                    // Use the GeoJSON layer group ref to iterate only feature layers (not all map layers)
                     const siblings = []
-                    e.target._map.eachLayer(layer => {
-                      if (layer.feature && (layer.feature.properties.name || null) === clickedName) {
-                        const p = layer.feature.properties
-                        const isRiver = p.waterway === 'river' || p.waterway === 'stream' || p.waterway === 'canal'
-                        layer.setStyle(isRiver ? SELECTED_STYLE_RIVER : SELECTED_STYLE_FILL)
-                        siblings.push(layer)
-                      }
-                    })
+                    if (geoJsonLayerRef.current) {
+                      geoJsonLayerRef.current.eachLayer(layer => {
+                        if ((layer.feature?.properties?.name || null) === clickedName) {
+                          const p = layer.feature.properties
+                          const isRiver = p.waterway === 'river' || p.waterway === 'stream' || p.waterway === 'canal'
+                          layer.setStyle(isRiver ? SELECTED_STYLE_RIVER : SELECTED_STYLE_FILL)
+                          siblings.push(layer)
+                        }
+                      })
+                    }
                     activeLayersRef.current = siblings
                   }
 
