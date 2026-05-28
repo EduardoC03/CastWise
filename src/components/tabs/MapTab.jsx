@@ -70,6 +70,15 @@ const getTilesInView = (bounds) => {
 
 // --- MAP COMPONENTS ---
 
+const MapClickHandler = ({ onMapClick }) => {
+  const map = useMap()
+  useEffect(() => {
+    map.on('click', onMapClick)
+    return () => map.off('click', onMapClick)
+  }, [map, onMapClick])
+  return null
+}
+
 const MapController = ({ onMoveEnd, onReady }) => {
   const map = useMap()
   const initialized = useRef(false)
@@ -91,7 +100,7 @@ const MapController = ({ onMoveEnd, onReady }) => {
   return null
 }
 
-export default function MapTab({ onSelect }) {
+export default function MapTab({ onSelect, filteredSites = [] }) {
   const [geoData, setGeoData] = useState({ type: 'FeatureCollection', features: [] })
   const [loading, setLoading] = useState(false)
   const [wdfwWaterNames, setWdfwWaterNames] = useState(new Set())
@@ -106,9 +115,12 @@ export default function MapTab({ onSelect }) {
     selectedSpecies: 'all'
   })
 
+  const [selectedWaterbody, setSelectedWaterbody] = useState(null)
+
   const mapRef = useRef(null)
   const hotspotLayerRef = useRef(null)
   const debounceTimer = useRef(null)
+  const highlightLayerRef = useRef(null)
   const currentMonth = new Date().getMonth()
 
   // Fetch WDFW Access Sites
@@ -222,6 +234,11 @@ export default function MapTab({ onSelect }) {
     const isMarine = p.place === 'sea' || p.place === 'bay' || p.place === 'sound' || p.place === 'harbor' || 
                      name.includes('sound') || name.includes('harbor') || name.includes('bay') || name.includes('strait') || name.includes('ocean');
 
+    const isSelected = selectedWaterbody && (p.name || '').toLowerCase() === selectedWaterbody.toLowerCase()
+
+    if (isSelected) {
+      return { color: '#ff6b35', weight: 3, fillColor: '#ff6b35', fillOpacity: 0.45, dashArray: null }
+    }
     if (isMarine) return { color: '#00b4b4', weight: 2, fillColor: '#00b4b4', fillOpacity: 0.18 }
     if (isRiver) return { color: '#1e78ff', weight: 3, fillOpacity: 0 }
     return { color: '#1e78ff', weight: 2, fillColor: '#1e78ff', fillOpacity: 0.25 }
@@ -259,21 +276,27 @@ export default function MapTab({ onSelect }) {
         />
         
         <MapController onMoveEnd={handleMoveEnd} onReady={onMapReady} />
+        <MapClickHandler onMapClick={() => setSelectedWaterbody(null)} />
 
         {filteredGeoData && filteredGeoData.features?.length > 0 && (
           <GeoJSON 
-            key={`geo-${filteredGeoData.features.length}-${filters.lakes}-${filters.rivers}-${filters.marine}`}
+            key={`geo-${filteredGeoData.features.length}-${filters.lakes}-${filters.rivers}-${filters.marine}-${selectedWaterbody}`}
             data={filteredGeoData} 
             style={getFeatureStyle} 
             onEachFeature={(f, l) => {
               l.on({
                 mouseover: (e) => {
-                  const style = getFeatureStyle(f);
-                  e.target.setStyle({ fillOpacity: style.fillOpacity + 0.15 });
+                  const isSelected = selectedWaterbody && (f.properties.name || '').toLowerCase() === selectedWaterbody.toLowerCase()
+                  if (!isSelected) {
+                    const style = getFeatureStyle(f);
+                    e.target.setStyle({ fillOpacity: (style.fillOpacity || 0) + 0.15, weight: style.weight + 1 });
+                  }
                 },
                 mouseout: (e) => e.target.setStyle(getFeatureStyle(f)),
                 click: (e) => {
                   L.DomEvent.stopPropagation(e);
+                  const clickedName = f.properties.name || null
+                  setSelectedWaterbody(prev => prev === clickedName ? null : clickedName)
                   if (onSelect) { const found = SITES_RAW.find(s => s.name.toLowerCase() === f.properties.name.toLowerCase()); if (found) onSelect(found); }
                   setSelectedFeature(f);
                 }
@@ -283,7 +306,7 @@ export default function MapTab({ onSelect }) {
         )}
 
         {/* ACCESS SITES LAYER */}
-        {SITES_RAW.map(site => (
+        {filteredSites.map(site => (
           <CircleMarker
             key={site.id}
             center={[site.lat, site.lng]}
@@ -356,6 +379,21 @@ export default function MapTab({ onSelect }) {
           <div className="bg-[var(--surface-color)] px-8 py-4 shadow-xl flex items-center gap-4 border-l-[6px] border-[var(--primary-accent)] rounded-r-xl animate-bounce">
             <div className="w-2 h-2 bg-[var(--primary-accent)] rounded-full animate-ping" />
             <p className="font-bold text-[10px] tracking-[0.3em] text-[var(--text-primary)] uppercase">Scanning Waterways...</p>
+          </div>
+        </div>
+      )}
+
+      {selectedWaterbody && (
+        <div className="absolute bottom-10 left-4 z-[1000]">
+          <div className="bg-[var(--surface-color)] px-4 py-3 shadow-xl flex items-center gap-3 border-l-[4px] rounded-r-xl" style={{ borderColor: '#ff6b35' }}>
+            <Zap size={12} style={{ color: '#ff6b35' }} />
+            <span className="font-bold text-[10px] tracking-[0.2em] text-[var(--text-primary)] uppercase">{selectedWaterbody}</span>
+            <button
+              onClick={() => setSelectedWaterbody(null)}
+              className="ml-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              <X size={12} />
+            </button>
           </div>
         </div>
       )}
