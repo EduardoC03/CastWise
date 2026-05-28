@@ -1,20 +1,54 @@
 import React, { useMemo } from 'react';
 import {
   ArrowLeft, Droplets, Sun, Fish, Anchor, Accessibility, Tent,
-  BookOpen, Plus, Check, Trophy, Compass, MapPin, ChevronRight
+  BookOpen, Plus, Check, Trophy, Compass, ChevronRight
 } from 'lucide-react';
 import { SITES } from '../data/sites';
-import { getRecommendations } from '../utils/ranking';
 
-/**
- * SiteRanking — the top-3 recommendations view.
- *
- * Props:
- *   profile     — angler profile from App state
- *   trip        — current trip (so we can show "Added" if user already picked)
- *   onSelect    — open the SiteProfile detail view
- *   onAddToTrip — add a site to the next trip
- */
+// ── Simple scoring until utils/ranking.js exists ──────────────────────────────
+function scoreSite(site, profile) {
+  let score = 60;
+  if (!profile) return score;
+
+  const access = profile.access || '';
+  if (access === 'Boat / kayak'  && site.boatRamps > 0)    score += 12;
+  if (access === 'Bank fishing'  && site.handLaunches >= 0) score += 8;
+  if (access === 'Wade fishing'  && site.type === 'River')  score += 10;
+  if (site.stocked)  score += 10;
+  if (site.opening)  score += 6;
+  if (profile.region && site.region &&
+      profile.region.toLowerCase().includes(site.region.toLowerCase().split(' ')[0])) {
+    score += 8;
+  }
+  if (profile.experience === 'Beginner' && site.ada_parking > 0) score += 4;
+  return Math.min(score, 99);
+}
+
+function getRecommendations(profile, sites) {
+  if (!sites || sites.length === 0) return { top: [], explore: null, totalScored: 0 };
+  const scored = sites
+    .filter(s => s.closure !== 'Closed')
+    .map(site => {
+      const score = scoreSite(site, profile);
+      const drivingFeatures = [];
+      if (site.stocked)         drivingFeatures.push({ label: 'Recently stocked', detail: site.stocked });
+      if (site.opening)         drivingFeatures.push({ label: 'Season opening',   detail: site.opening });
+      if (site.boatRamps > 0)   drivingFeatures.push({ label: 'Boat access',      detail: `${site.boatRamps} ramp${site.boatRamps > 1 ? 's' : ''}` });
+      if (site.ada_parking > 0) drivingFeatures.push({ label: 'ADA accessible',   detail: `${site.ada_parking} stall${site.ada_parking > 1 ? 's' : ''}` });
+      if (site.species?.length) drivingFeatures.push({ label: 'Species present',  detail: site.species.slice(0, 3).join(', ') });
+      return { site, score, drivingFeatures: drivingFeatures.slice(0, 3) };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const top     = scored.slice(0, 3);
+  const explore = scored.slice(3).find(r =>
+    r.site.region !== top[0]?.site.region || r.site.type !== top[0]?.site.type
+  ) || scored[3] || null;
+
+  return { top, explore, totalScored: scored.length };
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function SiteRanking({ profile, trip, onSelect, onAddToTrip }) {
   const { top, explore, totalScored } = useMemo(
     () => getRecommendations(profile, SITES),
@@ -23,30 +57,25 @@ export default function SiteRanking({ profile, trip, onSelect, onAddToTrip }) {
 
   if (!profile) {
     return (
-      <div className="p-6 text-center text-[var(--text-muted)] italic">
-        Complete your angler profile to see recommendations.
+      <div className="cw-empty" style={{ height: '100%' }}>
+        <Trophy size={40} className="cw-empty-icon" />
+        <h2>No profile yet</h2>
+        <p>Complete your angler profile to see personalized site recommendations.</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6 sm:py-8 animate-in fade-in duration-500">
-      {/* Header */}
-      <header className="mb-8">
-        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--primary-accent)] mb-2">
-          <Trophy size={12} />
-          <span>Your top picks · {totalScored} sites scored</span>
-        </div>
-        <h1 className="font-serif text-3xl sm:text-4xl font-bold text-[var(--secondary-accent)] tracking-tight leading-tight mb-1">
-          For {profile.name}, this week
-        </h1>
-        <p className="font-serif italic text-[var(--text-muted)] text-sm">
-          Ranked by your profile · {profile.region} · {profile.travel.toLowerCase()}
-        </p>
-      </header>
+    <div className="cw-screen" style={{ maxWidth: 780 }}>
+      <div className="cw-page-eyebrow">
+        <Trophy size={11} /> Your top picks · {totalScored} sites scored
+      </div>
+      <h1 className="cw-page-title">For {profile.name}, this week</h1>
+      <p className="cw-page-sub">
+        Ranked by your profile · {profile.region} · {(profile.travel || '').toLowerCase()}
+      </p>
 
-      {/* Top 3 */}
-      <section className="space-y-4 mb-10">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
         {top.map((result, idx) => (
           <RankedSiteCard
             key={result.site.id}
@@ -57,14 +86,16 @@ export default function SiteRanking({ profile, trip, onSelect, onAddToTrip }) {
             onAddToTrip={onAddToTrip}
           />
         ))}
-      </section>
+      </div>
 
-      {/* Explore pick */}
       {explore && (
-        <section className="mb-6">
-          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-muted)] mb-3">
-            <Compass size={12} />
-            <span>Try something new</span>
+        <div style={{ marginBottom: 24 }}>
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em',
+            textTransform: 'uppercase', color: 'var(--text-3)',
+            display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10,
+          }}>
+            <Compass size={11} /> Try something new
           </div>
           <ExploreCard
             result={explore}
@@ -72,317 +103,205 @@ export default function SiteRanking({ profile, trip, onSelect, onAddToTrip }) {
             onSelect={onSelect}
             onAddToTrip={onAddToTrip}
           />
-        </section>
+        </div>
       )}
 
-      {/* Footer note */}
-      <p className="text-xs font-serif italic text-[var(--text-muted)] text-center mt-8 pt-4 border-t border-[var(--border-color)]">
-        Scores reflect your profile, the site's access and species, and current season status.
-        The model never picks for you — it shows the reasoning so you can.
+      <p style={{
+        fontSize: 11, fontFamily: 'var(--font-display)', fontStyle: 'italic',
+        color: 'var(--text-3)', textAlign: 'center',
+        paddingTop: 16, borderTop: '1px solid var(--border)', marginTop: 8,
+      }}>
+        Scores reflect your profile, site access, species, and current season status.
       </p>
     </div>
   );
 }
 
-// =========================================================================
-// Top-3 ranked card — large, with score badge and driving features
-// =========================================================================
 function RankedSiteCard({ rank, result, inTrip, onSelect, onAddToTrip }) {
   const { site, score, drivingFeatures } = result;
-
   return (
-    <article className="bg-[var(--surface-color)] border border-[var(--border-color)] rounded-xl p-5 sm:p-6 shadow-sm hover:border-[var(--primary-accent)] transition-colors">
-      <div className="flex gap-4 sm:gap-6">
-        {/* Score badge + rank */}
-        <div className="flex flex-col items-center flex-shrink-0">
-          <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-[var(--primary-accent)] text-[var(--text-primary)] font-serif text-xl sm:text-2xl font-bold">
-            {score}
-          </div>
-          <div className="mt-2 text-[9px] font-mono uppercase tracking-widest text-[var(--text-muted)]">
-            #{rank}
-          </div>
+    <article className="cw-block" style={{ display: 'flex', gap: 20, marginBottom: 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: '50%',
+          background: rank === 1 ? 'var(--gold)' : 'var(--surface-2)',
+          border: rank === 1 ? 'none' : '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700,
+          color: rank === 1 ? 'var(--bg)' : 'var(--text)',
+        }}>
+          {score}
+        </div>
+        <div style={{
+          marginTop: 5, fontFamily: 'var(--font-mono)', fontSize: 9,
+          letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-3)',
+        }}>
+          #{rank}
+        </div>
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 4 }}>
+          {site.county} County · {site.region} WA
+        </div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: 'var(--text)', lineHeight: 1.1, marginBottom: 3 }}>
+          {site.name}
+        </div>
+        <div style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
+          {site.type} · Managed by {site.manager}
         </div>
 
-        {/* Site info */}
-        <div className="flex-1 min-w-0">
-          <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[var(--primary-accent)] mb-1">
-            {site.county} County · {site.region} WA
-          </div>
-          <h3 className="font-serif text-xl sm:text-2xl font-bold text-[var(--text-primary)] leading-tight mb-1">
-            {site.name}
-          </h3>
-          <div className="font-serif italic text-xs text-[var(--text-muted)] mb-3">
-            {site.type} · Managed by {site.manager}
-          </div>
-
-          {/* Species chips */}
-          {site.species && site.species.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-4">
-              {site.species.slice(0, 3).map(sp => (
-                <span
-                  key={sp}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--bg-color)] border border-[var(--border-color)] text-[10px] font-medium text-[var(--text-primary)]"
-                >
-                  {sp}
-                </span>
-              ))}
-              {!site.isCurated && (
-                <span className="text-[9px] italic text-[var(--text-muted)] self-center">
-                  inferred
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Driving features — the "why" */}
-          <div className="space-y-1.5 mb-4">
-            <div className="text-[9px] font-mono uppercase tracking-[0.15em] text-[var(--text-muted)] mb-1.5">
-              Why this site
-            </div>
-            {drivingFeatures.map((f, i) => (
-              <div key={i} className="flex items-start gap-2 text-[13px] leading-snug">
-                <span className="text-[var(--primary-accent)] mt-0.5 flex-shrink-0">▸</span>
-                <span className="text-[var(--text-primary)]">
-                  <span className="font-semibold">{f.label}:</span>{' '}
-                  <span className="text-[var(--text-muted)]">{f.detail}</span>
-                </span>
-              </div>
+        {site.species?.length > 0 && (
+          <div className="cw-chips" style={{ marginBottom: 12 }}>
+            {site.species.slice(0, 3).map(sp => (
+              <span key={sp} className="cw-chip" style={{ fontSize: 11 }}>{sp}</span>
             ))}
-          </div>
-
-          {/* CTAs */}
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => onSelect(site)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-[var(--border-color)] text-[var(--text-primary)] text-xs font-semibold hover:border-[var(--primary-accent)] hover:bg-[var(--bg-color)] transition"
-            >
-              View details <ChevronRight size={12} />
-            </button>
-            {inTrip ? (
-              <button
-                disabled
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-[var(--success)]/15 text-[var(--success)] text-xs font-semibold cursor-default"
-              >
-                <Check size={12} /> Added to trip
-              </button>
-            ) : (
-              <button
-                onClick={() => onAddToTrip(site)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-[var(--primary-accent)] text-[var(--text-primary)] text-xs font-semibold hover:brightness-95 transition"
-              >
-                <Plus size={12} /> Add to next trip
-              </button>
+            {!site.isCurated && (
+              <span style={{ fontSize: 10, fontStyle: 'italic', color: 'var(--text-3)', alignSelf: 'center' }}>inferred</span>
             )}
           </div>
+        )}
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 7 }}>
+            Why this site
+          </div>
+          {drivingFeatures.map((f, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 5, fontSize: 13 }}>
+              <span style={{ color: 'var(--gold)', flexShrink: 0, marginTop: 1 }}>▸</span>
+              <span style={{ color: 'var(--text)' }}>
+                <strong>{f.label}:</strong>{' '}
+                <span style={{ color: 'var(--text-2)' }}>{f.detail}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button onClick={() => onSelect && onSelect(site)} className="cw-btn cw-btn-ghost" style={{ padding: '8px 14px', fontSize: 12 }}>
+            View details <ChevronRight size={12} />
+          </button>
+          {inTrip ? (
+            <button disabled className="cw-btn" style={{ padding: '8px 14px', fontSize: 12, background: 'rgba(90,173,102,0.12)', color: 'var(--green-bright)', cursor: 'default' }}>
+              <Check size={12} /> Added to trip
+            </button>
+          ) : (
+            <button onClick={() => onAddToTrip && onAddToTrip(site)} className="cw-btn cw-btn-primary" style={{ padding: '8px 14px', fontSize: 12 }}>
+              <Plus size={12} /> Add to trip
+            </button>
+          )}
         </div>
       </div>
     </article>
   );
 }
 
-// =========================================================================
-// Explore card — smaller, visually distinct (green accent vs gold)
-// =========================================================================
 function ExploreCard({ result, inTrip, onSelect, onAddToTrip }) {
   const { site, score, drivingFeatures } = result;
   return (
-    <article className="bg-[var(--surface-color)] border border-[var(--border-color)] rounded-xl p-5 shadow-sm border-l-[3px] border-l-[var(--secondary-accent)]">
-      <div className="flex items-start gap-4">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[var(--secondary-accent)] text-white font-serif text-lg font-bold flex-shrink-0">
-          {score}
+    <article className="cw-block" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 0, cursor: 'pointer' }} onClick={() => onSelect && onSelect(site)}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 4 }}>
+          {site.county} County · {site.region} WA
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[var(--secondary-accent)] mb-1">
-            {site.county} County · Under-fished match
-          </div>
-          <h3 className="font-serif text-lg font-bold text-[var(--text-primary)] leading-tight mb-1">
-            {site.name}
-          </h3>
-          <p className="text-xs text-[var(--text-muted)] italic mb-3">
-            A site that scored well but didn't make the top 3 — fishing it helps distribute pressure across the state.
-          </p>
-          {drivingFeatures[0] && (
-            <div className="text-[13px] text-[var(--text-primary)] mb-3">
-              <span className="font-semibold">{drivingFeatures[0].label}:</span>{' '}
-              <span className="text-[var(--text-muted)]">{drivingFeatures[0].detail}</span>
-            </div>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => onSelect(site)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[var(--border-color)] text-[var(--text-primary)] text-xs font-semibold hover:border-[var(--secondary-accent)] transition"
-            >
-              View details <ChevronRight size={12} />
-            </button>
-            {!inTrip && (
-              <button
-                onClick={() => onAddToTrip(site)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--secondary-accent)] text-white text-xs font-semibold hover:brightness-110 transition"
-              >
-                <Plus size={12} /> Add to trip
-              </button>
-            )}
-          </div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 700, color: 'var(--text)', marginBottom: 3 }}>
+          {site.name}
         </div>
+        {drivingFeatures[0] && (
+          <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+            {drivingFeatures[0].label}: <span style={{ color: 'var(--text-2)' }}>{drivingFeatures[0].detail}</span>
+          </div>
+        )}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-3)' }}>{score}</div>
+        {!inTrip && (
+          <button onClick={e => { e.stopPropagation(); onAddToTrip && onAddToTrip(site); }} className="cw-btn cw-btn-ghost" style={{ padding: '6px 12px', fontSize: 11 }}>
+            <Plus size={11} /> Add
+          </button>
+        )}
       </div>
     </article>
   );
 }
 
-// =========================================================================
-// SiteProfile — moved here from the old stub. This is the detail view
-// shown when user clicks "View details" or a map pin. Tailwind-only.
-// =========================================================================
 export function SiteProfile({ site, inTrip, onBack, onAdd }) {
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6 sm:px-6 sm:py-8 animate-in fade-in duration-300">
-      <button
-        onClick={onBack}
-        className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.18em] text-[var(--text-muted)] hover:text-[var(--secondary-accent)] mb-4 transition-colors"
-      >
-        <ArrowLeft size={12} /> Back
-      </button>
+    <div className="cw-screen" style={{ maxWidth: 700 }}>
+      <button className="cw-back" onClick={onBack}><ArrowLeft size={12} /> Back</button>
 
-      <header className="mb-6">
-        <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--primary-accent)] mb-1.5">
-          {site.county} County · {site.region} WA · {site.type}
-        </div>
-        <h1 className="font-serif text-3xl sm:text-4xl font-bold text-[var(--secondary-accent)] leading-tight mb-1.5">
-          {site.name}
-        </h1>
-        <div className="font-serif italic text-sm text-[var(--text-muted)]">
-          Managed by {site.manager}
-        </div>
-      </header>
+      <div style={{ marginBottom: 24 }}>
+        <div className="cw-site-county">{site.county} County · {site.region} WA · {site.type}</div>
+        <h1 className="cw-site-name">{site.name}</h1>
+        <div className="cw-site-mgr">Managed by {site.manager}</div>
+      </div>
 
-      {/* Alerts */}
       {(site.stocked || site.opening) && (
-        <div className="space-y-2 mb-6">
+        <div className="cw-alerts">
           {site.stocked && (
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--primary-accent)]/10 border-l-4 border-[var(--primary-accent)]">
-              <Droplets size={16} className="text-[var(--primary-accent)] mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <strong className="block text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-0.5">
-                  Recently stocked
-                </strong>
-                <span className="font-serif font-semibold text-sm text-[var(--text-primary)]">{site.stocked}</span>
-              </div>
+            <div className="cw-alert cw-alert-stock">
+              <Droplets size={14} />
+              <div><strong>Recently stocked</strong><span>{site.stocked}</span></div>
             </div>
           )}
           {site.opening && (
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--secondary-accent)]/10 border-l-4 border-[var(--secondary-accent)]">
-              <Sun size={16} className="text-[var(--secondary-accent)] mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <strong className="block text-[9px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-0.5">
-                  Season opening
-                </strong>
-                <span className="font-serif font-semibold text-sm text-[var(--text-primary)]">{site.opening}</span>
-              </div>
+            <div className="cw-alert cw-alert-open">
+              <Sun size={14} />
+              <div><strong>Season opening</strong><span>{site.opening}</span></div>
             </div>
           )}
         </div>
       )}
 
-      {/* Species */}
-      <section className="bg-[var(--surface-color)] border border-[var(--border-color)] rounded-xl p-5 mb-4">
-        <h3 className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-muted)] mb-3">
-          <Fish size={12} /> Likely species
-        </h3>
-        <div className="flex flex-wrap gap-1.5">
-          {(site.species || []).map(sp => (
-            <span
-              key={sp}
-              className="px-2.5 py-1 rounded-full bg-[var(--bg-color)] border border-[var(--border-color)] text-xs font-medium text-[var(--text-primary)]"
-            >
-              {sp}
-            </span>
-          ))}
+      <div className="cw-block cw-block-accent-green">
+        <div className="cw-block-title"><Fish size={11} /> Likely Species</div>
+        <div className="cw-chips">
+          {(site.species || []).map(sp => <span key={sp} className="cw-chip">{sp}</span>)}
         </div>
-        {!site.isCurated && (
-          <p className="font-serif italic text-[11px] text-[var(--text-muted)] mt-3 leading-relaxed">
-            Species inferred from waterbody type. Verify locally before fishing.
-          </p>
-        )}
-      </section>
+        {!site.isCurated && <div className="cw-disclaim">Species inferred from waterbody type. Verify locally before fishing.</div>}
+      </div>
 
-      {/* Access & infrastructure */}
-      <section className="bg-[var(--surface-color)] border border-[var(--border-color)] rounded-xl p-5 mb-4">
-        <h3 className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-muted)] mb-3">
-          <Anchor size={12} /> Access & infrastructure
-        </h3>
-        <div className="grid grid-cols-4 gap-2 mb-3">
-          <Fact n={site.boatRamps} label="Boat ramps" />
-          <Fact n={site.handLaunches} label="Hand launches" />
-          <Fact n={site.fishingPlatforms} label="Platforms" />
-          <Fact n={site.restrooms} label="Restrooms" />
+      <div className="cw-block cw-block-accent-green">
+        <div className="cw-block-title"><Anchor size={11} /> Access &amp; Infrastructure</div>
+        <div className="cw-facts">
+          <div className="cw-fact"><div className="cw-fact-n">{site.boatRamps ?? 0}</div><div className="cw-fact-l">Boat ramps</div></div>
+          <div className="cw-fact"><div className="cw-fact-n">{site.handLaunches ?? 0}</div><div className="cw-fact-l">Hand launches</div></div>
+          <div className="cw-fact"><div className="cw-fact-n">{site.fishingPlatforms ?? 0}</div><div className="cw-fact-l">Platforms</div></div>
+          <div className="cw-fact"><div className="cw-fact-n">{site.restrooms ?? 0}</div><div className="cw-fact-l">Restrooms</div></div>
         </div>
         {(site.ada_parking > 0 || site.ada_loading || site.ada_restrooms > 0) && (
-          <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] mt-3">
-            <Accessibility size={12} className="flex-shrink-0" />
-            <span>
-              ADA:
-              {site.ada_parking > 0 && ` ${site.ada_parking} parking stall${site.ada_parking > 1 ? 's' : ''}`}
-              {site.ada_loading && ', loading platform'}
-              {site.ada_restrooms > 0 && `, ${site.ada_restrooms} restroom${site.ada_restrooms > 1 ? 's' : ''}`}
-            </span>
+          <div className="cw-detail">
+            <Accessibility size={11} />
+            ADA: {[
+              site.ada_parking > 0 && `${site.ada_parking} parking stall${site.ada_parking > 1 ? 's' : ''}`,
+              site.ada_loading && 'loading platform',
+              site.ada_restrooms > 0 && `${site.ada_restrooms} restroom${site.ada_restrooms > 1 ? 's' : ''}`,
+            ].filter(Boolean).join(', ')}
           </div>
         )}
-        {site.ramp_surface && (
-          <div className="text-xs text-[var(--text-muted)] mt-2">Ramp surface: {site.ramp_surface}</div>
-        )}
-        {site.camping && (
-          <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] mt-2">
-            <Tent size={12} /> Camping allowed on site
-          </div>
-        )}
-      </section>
+        {site.ramp_surface && <div className="cw-detail">Ramp surface: {site.ramp_surface}</div>}
+        {site.camping && <div className="cw-detail"><Tent size={11} /> Camping allowed</div>}
+      </div>
 
-      {/* Regulations */}
-      <section className="bg-[var(--surface-color)] border border-[var(--border-color)] rounded-xl p-5 mb-6 border-l-[3px] border-l-[var(--primary-accent)]">
-        <h3 className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-muted)] mb-3">
-          <BookOpen size={12} /> Access regulations
-        </h3>
-        <p className="text-sm text-[var(--text-primary)] mb-2">
-          <strong>Closure status:</strong> {site.closure}
-        </p>
-        {site.openDates && (
-          <p className="text-sm text-[var(--text-primary)] mb-2">{site.openDates}</p>
-        )}
-        {site.notes && (
-          <p className="font-serif italic text-sm text-[var(--text-muted)] mb-2">{site.notes}</p>
-        )}
-        <p className="font-serif italic text-[11px] text-[var(--text-muted)] mt-3 leading-relaxed">
-          Always verify current fishing rules and emergency regulations at wdfw.wa.gov before fishing.
-        </p>
-      </section>
+      <div className="cw-block cw-block-accent-gold">
+        <div className="cw-block-title"><BookOpen size={11} /> Access Regulations</div>
+        <div className="cw-detail-block"><strong>Closure status:</strong> {site.closure}</div>
+        {site.openDates && <div className="cw-detail-block">{site.openDates}</div>}
+        {site.notes && <div className="cw-detail-block" style={{ fontStyle: 'italic', fontFamily: 'var(--font-display)' }}>{site.notes}</div>}
+        <div className="cw-disclaim">Always verify current rules at wdfw.wa.gov before fishing.</div>
+      </div>
 
-      {/* CTA */}
-      <div className="flex">
+      <div style={{ marginTop: 8 }}>
         {inTrip ? (
-          <button
-            disabled
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-md bg-[var(--success)]/15 text-[var(--success)] text-sm font-semibold cursor-default"
-          >
+          <button className="cw-btn" disabled style={{ background: 'rgba(90,173,102,0.12)', color: 'var(--green-bright)' }}>
             <Check size={14} /> Added to trip
           </button>
         ) : (
-          <button
-            onClick={onAdd}
-            className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-md bg-[var(--primary-accent)] text-[var(--text-primary)] text-sm font-semibold hover:brightness-95 transition"
-          >
+          <button className="cw-btn cw-btn-primary cw-btn-full" onClick={onAdd}>
             <Plus size={14} /> Add to next trip
           </button>
         )}
       </div>
-    </div>
-  );
-}
-
-function Fact({ n, label }) {
-  return (
-    <div className="text-center p-2 bg-[var(--bg-color)] rounded-md border border-[var(--border-color)]">
-      <div className="font-serif text-xl font-bold text-[var(--secondary-accent)] leading-none">{n}</div>
-      <div className="text-[9px] text-[var(--text-muted)] uppercase tracking-tight mt-1">{label}</div>
     </div>
   );
 }
