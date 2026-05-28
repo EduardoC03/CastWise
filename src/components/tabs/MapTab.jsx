@@ -133,13 +133,13 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
     hotspots: true,
     selectedSpecies: 'all'
   })
+  const selectedWaterbodyRef = useRef(null)
   const [selectedWaterbody, setSelectedWaterbody] = useState(null)
+  selectedWaterbodyRef.current = selectedWaterbody
 
   const mapRef = useRef(null)
   const debounceTimer = useRef(null)
-  // Tracks Leaflet layer objects by feature OSM id for direct setStyle — no re-render needed
   const layerMapRef = useRef({})
-  // Tracks the previous selection so we can un-highlight it without re-rendering
   const prevSelectedRef = useRef(null)
   const currentMonth = new Date().getMonth()
 
@@ -324,11 +324,11 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
             data={filteredGeoData} 
             style={getBaseStyle}
             onEachFeature={(f, l) => {
-              // Register this layer under its name for direct imperative style updates
               const name = (f.properties.name || '').toLowerCase()
               if (name) {
+                // Use a WeakSet per name to avoid duplicate layer registration
                 if (!layerMapRef.current[name]) layerMapRef.current[name] = []
-                layerMapRef.current[name].push(l)
+                if (!layerMapRef.current[name].includes(l)) layerMapRef.current[name].push(l)
                 // If this feature is already selected (e.g. new tiles loaded), apply highlight immediately
                 if (selectedWaterbody && name === selectedWaterbody.toLowerCase()) {
                   const p = f.properties
@@ -338,15 +338,14 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
               }
               l.on({
                 mouseover: (e) => {
-                  // Only add hover effect if not currently selected
-                  const isSelected = selectedWaterbody && name === selectedWaterbody.toLowerCase()
+                  const isSelected = selectedWaterbodyRef.current && name === selectedWaterbodyRef.current.toLowerCase()
                   if (!isSelected) {
                     const base = getBaseStyle(f)
                     e.target.setStyle({ fillOpacity: (base.fillOpacity || 0) + 0.2, weight: (base.weight || 2) + 1 })
                   }
                 },
                 mouseout: (e) => {
-                  const isSelected = selectedWaterbody && name === selectedWaterbody.toLowerCase()
+                  const isSelected = selectedWaterbodyRef.current && name === selectedWaterbodyRef.current.toLowerCase()
                   if (!isSelected) e.target.setStyle(getBaseStyle(f))
                 },
                 click: (e) => {
