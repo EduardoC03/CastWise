@@ -1,148 +1,207 @@
-import React, { useState } from 'react';
-import { Cloud, Droplets, Thermometer, Wind, Trophy, ChevronRight, Plus, Fish } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Cloud, Droplets, Thermometer, Wind, Trophy, ChevronRight, Plus, Fish, Loader2 } from 'lucide-react';
+
+const REGION_COORDS = {
+  'Northwest WA': { lat: 48.7519, lng: -122.4787 },
+  'Southwest WA': { lat: 46.1400, lng: -122.9390 },
+  'Central WA':   { lat: 47.0379, lng: -120.3265 },
+  'Eastern WA':   { lat: 47.6588, lng: -117.4260 },
+};
+
+const weatherLabel = (code) => {
+  if (code === 0) return 'Clear';
+  if (code <= 3)  return 'Partly Cloudy';
+  if (code <= 48) return 'Fog';
+  if (code <= 67) return 'Rain';
+  if (code <= 77) return 'Snow';
+  if (code <= 82) return 'Showers';
+  if (code <= 99) return 'Thunderstorm';
+  return 'Cloudy';
+};
+
+const greeting = () => {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+};
+
+const personalizedLine = (profile) => {
+  const { region = '', experience = '', styles = [], travel = '' } = profile;
+  const style = styles[0] || 'fishing';
+  if (experience === 'Beginner')        return `We'll find beginner-friendly spots in ${region} with easy access.`;
+  if (travel === 'Anywhere in WA')      return `Ready to explore all of Washington? Here are this week's best ${style} spots.`;
+  if (experience === 'Advanced')        return `Top-rated ${style} spots in ${region} matched to your skill level.`;
+  return `Finding the best ${style} spots in ${region} for this weekend.`;
+};
 
 export default function Sidebar({ profile, topSite, onNavigate }) {
-  const [catchInput, setCatchInput] = useState('');
-  const [recentCatches, setRecentCatches] = useState([
-    { id: 1, species: 'Rainbow Trout', date: '2 days ago' },
-    { id: 2, species: 'Cutthroat Trout', date: 'Last week' },
+  const [catchInput, setCatchInput]   = useState('');
+  const [catches, setCatches]         = useState([
+    { id: 1, species: 'Rainbow Trout',   date: '2 days ago' },
+    { id: 2, species: 'Cutthroat Trout', date: 'Last week'  },
   ]);
+  const [weather, setWeather]         = useState(null);
+  const [weatherLoading, setWeatherLoading] = useState(true);
 
-  const getTimeGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-  };
+  useEffect(() => {
+    setWeatherLoading(true);
+    const coords = REGION_COORDS[profile?.region] || REGION_COORDS['Northwest WA'];
+    fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lng}` +
+      `&current=temperature_2m,wind_speed_10m,precipitation,weathercode` +
+      `&temperature_unit=fahrenheit&wind_speed_unit=mph`
+    )
+      .then(r => r.json())
+      .then(d => {
+        setWeather({
+          temp:    Math.round(d.current.temperature_2m),
+          wind:    Math.round(d.current.wind_speed_10m),
+          precip:  d.current.precipitation,
+          label:   weatherLabel(d.current.weathercode),
+        });
+      })
+      .catch(() => setWeather(null))
+      .finally(() => setWeatherLoading(false));
+  }, [profile?.region]);
 
-  const getPersonalizedLine = () => {
-    if (profile.region.includes('Northwest') && profile.experience === 'Beginner') {
-      return 'Here are the best spots near Bellingham for a beginner this weekend.';
-    }
-    return `Finding the best ${profile.styles[0] || 'fishing'} spots in ${profile.region} for you.`;
-  };
-
-  const handleAddCatch = (e) => {
-    e.preventDefault();
+  const addCatch = () => {
     if (!catchInput.trim()) return;
-    const newCatch = {
-      id: Date.now(),
-      species: catchInput,
-      date: 'Just now'
-    };
-    setRecentCatches([newCatch, ...recentCatches.slice(0, 2)]);
+    setCatches(prev => [{ id: Date.now(), species: catchInput.trim(), date: 'Just now' }, ...prev.slice(0, 2)]);
     setCatchInput('');
   };
 
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
   return (
-    <aside className="w-[280px] flex-shrink-0 border-r border-[var(--border-color)] bg-[var(--bg-color)] p-6 flex flex-col gap-6 overflow-y-auto hidden lg:flex h-full">
-      {/* Welcome Card */}
-      <div className="p-5 bg-[var(--surface-color)] rounded-2xl border border-[var(--border-color)] shadow-sm animate-in fade-in slide-in-from-left duration-500">
-        <h3 className="text-xl font-bold text-[var(--text-primary)] mb-1">
-          {getTimeGreeting()}, {profile.name}!
-        </h3>
-        <p className="text-xs text-[var(--text-muted)] mb-3">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-        <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-          {getPersonalizedLine()}
-        </p>
+    <aside className="cw-sidebar">
+
+      {/* ── Welcome ── */}
+      <div className="cw-sidebar-card">
+        <div className="cw-card-label">
+          <span className="cw-card-label-dot" />
+          Dashboard
+        </div>
+        <div className="cw-welcome-name">{greeting()}, {profile?.name}.</div>
+        <div className="cw-welcome-date">{today}</div>
+        <div className="cw-welcome-tagline">{personalizedLine(profile)}</div>
       </div>
 
-      {/* Top Pick Card */}
-      {topSite && (
-        <div className="p-5 bg-[var(--surface-color)] rounded-2xl border border-[var(--border-color)] shadow-sm animate-in fade-in slide-in-from-left duration-500 delay-100">
-          <div className="flex items-center gap-2 mb-3">
-            <Trophy size={16} className="text-[var(--primary-accent)]" />
-            <span className="text-xs font-bold uppercase tracking-widest text-[var(--primary-accent)]">Top Pick</span>
-          </div>
-          <h4 className="text-lg font-bold text-[var(--text-primary)] mb-2 leading-tight">{topSite.name}</h4>
-          <div className="inline-block px-2 py-1 bg-[var(--primary-accent)]/10 text-[var(--primary-accent)] text-xs font-black rounded mb-4">
-            94 MATCH SCORE
-          </div>
-          <ul className="space-y-2 mb-4">
-            {['Perfect for wading', 'High stocking volume'].map(reason => (
-              <li key={reason} className="text-xs text-[var(--text-muted)] flex items-center gap-2">
-                <div className="w-1 h-1 bg-[var(--primary-accent)] rounded-full" />
-                {reason}
-              </li>
-            ))}
-          </ul>
-          <button 
-            onClick={() => onNavigate('rankings')}
-            className="text-xs font-bold text-[var(--primary-accent)] hover:underline flex items-center gap-1"
-          >
-            See all picks <ChevronRight size={12} />
-          </button>
+      {/* ── Top Pick ── */}
+      <div className="cw-sidebar-card">
+        <div className="cw-card-label">
+          <Trophy size={10} />
+          Top Pick
         </div>
-      )}
-
-      {/* Conditions Widget */}
-      <div className="p-5 bg-[var(--surface-color)] rounded-2xl border border-[var(--border-color)] shadow-sm animate-in fade-in slide-in-from-left duration-500 delay-200">
-        <h4 className="text-xs font-bold uppercase tracking-[0.15em] text-[var(--text-muted)] mb-4">Today's Conditions</h4>
-        {/* TODO: wire up NOAA/USGS API */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex items-center gap-2">
-            <Thermometer size={16} className="text-orange-400" />
-            <div>
-              <p className="text-[10px] text-[var(--text-muted)] uppercase">Water</p>
-              <p className="text-sm font-bold text-[var(--text-primary)]">54°F</p>
+        {topSite ? (
+          <>
+            <div className="cw-pick-site">{topSite.name}</div>
+            <div className="cw-pick-county">{topSite.county} County</div>
+            <div className="cw-pick-badge">
+              <span>Score based on your profile</span>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Cloud size={16} className="text-blue-400" />
-            <div>
-              <p className="text-[10px] text-[var(--text-muted)] uppercase">Weather</p>
-              <p className="text-sm font-bold text-[var(--text-primary)]">Partly Cloudy</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Droplets size={16} className="text-cyan-400" />
-            <div>
-              <p className="text-[10px] text-[var(--text-muted)] uppercase">Flow</p>
-              <p className="text-sm font-bold text-[var(--text-primary)]">420 cfs</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Wind size={16} className="text-slate-400" />
-            <div>
-              <p className="text-[10px] text-[var(--text-muted)] uppercase">Wind</p>
-              <p className="text-sm font-bold text-[var(--text-primary)]">8 mph</p>
-            </div>
-          </div>
-        </div>
-        <div className="mt-4 pt-4 border-t border-[var(--border-color)] text-[9px] italic text-[var(--text-muted)]">
-          * Conditions are placeholder data
-        </div>
+            <button className="cw-pick-link" onClick={() => onNavigate('rankings')}>
+              See all picks <ChevronRight size={11} />
+            </button>
+          </>
+        ) : (
+          <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>
+            Complete your profile to see picks.
+          </p>
+        )}
       </div>
 
-      {/* Catch Log Quick-Entry */}
-      <div className="p-5 bg-[var(--surface-color)] rounded-2xl border border-[var(--border-color)] shadow-sm animate-in fade-in slide-in-from-left duration-500 delay-300">
-        <h4 className="text-xs font-bold uppercase tracking-[0.15em] text-[var(--text-muted)] mb-4">Catch Log</h4>
-        <form onSubmit={handleAddCatch} className="flex gap-2 mb-4">
-          <input 
-            type="text" 
+      {/* ── Conditions ── */}
+      <div className="cw-sidebar-card">
+        <div className="cw-card-label">
+          <Cloud size={10} />
+          Today's Conditions
+        </div>
+
+        {weatherLoading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0' }}>
+            <Loader2 size={20} className="cw-spin" style={{ color: 'var(--gold)' }} />
+          </div>
+        ) : weather ? (
+          <>
+            <div className="cw-cond-grid">
+              <div className="cw-cond-item">
+                <div className="cw-cond-icon">
+                  <Thermometer size={14} style={{ color: '#f97316' }} />
+                </div>
+                <div>
+                  <div className="cw-cond-val">{weather.temp}°F</div>
+                  <div className="cw-cond-lbl">Air Temp</div>
+                </div>
+              </div>
+              <div className="cw-cond-item">
+                <div className="cw-cond-icon">
+                  <Cloud size={14} style={{ color: '#60a5fa' }} />
+                </div>
+                <div>
+                  <div className="cw-cond-val">{weather.label}</div>
+                  <div className="cw-cond-lbl">Weather</div>
+                </div>
+              </div>
+              <div className="cw-cond-item">
+                <div className="cw-cond-icon">
+                  <Droplets size={14} style={{ color: '#22d3ee' }} />
+                </div>
+                <div>
+                  <div className="cw-cond-val">{weather.precip > 0 ? `${weather.precip}mm` : 'Dry'}</div>
+                  <div className="cw-cond-lbl">Precip</div>
+                </div>
+              </div>
+              <div className="cw-cond-item">
+                <div className="cw-cond-icon">
+                  <Wind size={14} style={{ color: '#94a3b8' }} />
+                </div>
+                <div>
+                  <div className="cw-cond-val">{weather.wind} mph</div>
+                  <div className="cw-cond-lbl">Wind</div>
+                </div>
+              </div>
+            </div>
+            <div className="cw-cond-note">* Air temp only · water temp not available</div>
+          </>
+        ) : (
+          <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>Conditions unavailable</p>
+        )}
+      </div>
+
+      {/* ── Catch Log ── */}
+      <div className="cw-sidebar-card">
+        <div className="cw-card-label">
+          <Fish size={10} />
+          Catch Log
+        </div>
+        <div className="cw-catch-input-row">
+          <input
+            className="cw-catch-input"
             placeholder="What'd you catch?"
             value={catchInput}
-            onChange={(e) => setCatchInput(e.target.value)}
-            className="flex-1 min-w-0 bg-[var(--bg-color)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] focus:border-[var(--primary-accent)] outline-none"
+            onChange={e => setCatchInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addCatch()}
           />
-          <button type="submit" className="p-2 bg-[var(--primary-accent)] text-[var(--bg-color)] rounded-lg hover:opacity-90 transition-opacity">
-            <Plus size={16} />
+          <button className="cw-catch-add-btn" type="button" onClick={addCatch}>
+            <Plus size={14} />
           </button>
-        </form>
-        <div className="space-y-3">
-          {recentCatches.map(c => (
-            <div key={c.id} className="flex items-center gap-3">
-              <div className="p-2 bg-[var(--bg-color)] rounded-lg text-[var(--primary-accent)]">
-                <Fish size={14} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {catches.map(c => (
+            <div key={c.id} className="cw-catch-item">
+              <div className="cw-catch-fish-icon">
+                <Fish size={13} />
               </div>
               <div>
-                <p className="text-xs font-bold text-[var(--text-primary)]">{c.species}</p>
-                <p className="text-[10px] text-[var(--text-muted)]">{c.date}</p>
+                <div className="cw-catch-species">{c.species}</div>
+                <div className="cw-catch-date">{c.date}</div>
               </div>
             </div>
           ))}
         </div>
       </div>
+
     </aside>
   );
 }
