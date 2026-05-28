@@ -14,14 +14,8 @@ const SLIDES = [
   { id: 'completion', type: 'completion' },
 ];
 
-// ── Unsplash photo for welcome background ─────────────────────────────────────
-// Multiple fallback photos — browser will use whichever loads first
-const WELCOME_PHOTOS = [
-  'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=1600&q=80&fit=crop', // misty mountain lake
-  'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1600&q=80&fit=crop', // forest lake
-  'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=1600&q=80&fit=crop', // mountain reflection
-];
-const WELCOME_PHOTO = WELCOME_PHOTOS[0];
+// ── Welcome background — place welcome-bg.jpg in your /public folder ────────
+const WELCOME_PHOTO = '/welcome-bg.jpg';
 
 // ── Mountain silhouette SVG layers for name + question slides ─────────────────
 function MountainBg() {
@@ -130,19 +124,11 @@ export default function Onboarding({ onComplete }) {
             src={WELCOME_PHOTO}
             alt=""
             aria-hidden="true"
-            onError={e => {
-              const idx = WELCOME_PHOTOS.indexOf(e.target.src);
-              if (idx < WELCOME_PHOTOS.length - 1) {
-                e.target.src = WELCOME_PHOTOS[idx + 1];
-              } else {
-                e.target.style.display = 'none';
-              }
-            }}
             style={{
               position: 'absolute', inset: 0,
               width: '100%', height: '100%',
               objectFit: 'cover',
-              objectPosition: 'center 40%',
+              objectPosition: 'center 60%',
             }}
           />
           {/* Subtle dark overlay so text reads */}
@@ -151,42 +137,40 @@ export default function Onboarding({ onComplete }) {
             background: 'linear-gradient(to bottom, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.32) 100%)',
           }} />
 
-          {/* Ghost navbar — invisible until hover */}
-          <div className="ob-ghost-nav" style={{
+          {/* Navbar — always visible, semi-transparent dark bar */}
+          <div style={{
             position: 'absolute', top: 0, left: 0, right: 0,
             padding: '0 32px',
             height: 56,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            transition: 'background 300ms',
+            background: 'rgba(0,0,0,0.38)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            zIndex: 10,
           }}>
-            <style>{`
-              .ob-ghost-nav { background: transparent; }
-              .ob-ghost-nav:hover { background: rgba(0,0,0,0.35); }
-              .ob-ghost-nav .ob-nav-link { color: rgba(255,255,255,0); transition: color 300ms; }
-              .ob-ghost-nav:hover .ob-nav-link { color: rgba(255,255,255,0.75); }
-              .ob-ghost-nav .ob-nav-logo { color: rgba(255,255,255,0); transition: color 300ms; }
-              .ob-ghost-nav:hover .ob-nav-logo { color: rgba(255,255,255,0.9); }
-            `}</style>
             {/* Logo */}
-            <span className="ob-nav-logo" style={{
-              fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700,
-              letterSpacing: '-0.02em',
+            <span style={{
+              fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 700,
+              letterSpacing: '-0.02em', color: '#f0ede4',
             }}>
               Cast<em style={{ fontStyle: 'italic', color: 'var(--gold)' }}>Wise</em>
             </span>
             {/* Nav links */}
-            <div style={{ display: 'flex', gap: 32 }}>
+            <div style={{ display: 'flex', gap: 28 }}>
               {['Map', 'Picks', 'Species', 'Trip Briefing'].map(l => (
-                <span key={l} className="ob-nav-link" style={{
+                <span key={l} style={{
                   fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 500,
+                  color: 'rgba(240,237,228,0.75)',
                   cursor: 'default',
+                  letterSpacing: '0.01em',
                 }}>
                   {l}
                 </span>
               ))}
             </div>
+            {/* Right spacer keeps links centered */}
             <div style={{ width: 120 }} />
           </div>
 
