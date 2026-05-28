@@ -2,6 +2,11 @@
 
 A knowledgeable Washington fishing assistant working with the Washington Department of Fish and Wildlife (WDFW).
 
+## 🚀 Live Demo
+
+The app is automatically deployed to GitHub Pages:
+**[View CastWise Live](https://EduardoC03.github.io/CastWise/)**
+
 ## Setup
 
 1. Install dependencies:
@@ -18,6 +23,10 @@ A knowledgeable Washington fishing assistant working with the Washington Departm
    ```bash
    npm run build
    ```
+
+## Deployment
+
+This project uses **GitHub Actions** for automatic deployment. Every time you push changes to the `main` branch, the app is automatically built and deployed to GitHub Pages.
 
 ## Documentation
 
