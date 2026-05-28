@@ -139,8 +139,8 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
 
   const mapRef = useRef(null)
   const debounceTimer = useRef(null)
-  const layerMapRef = useRef({})
-  const prevSelectedRef = useRef(null)
+  // Holds the currently highlighted Leaflet layers so we can un-highlight them directly
+  const activeLayersRef = useRef([])
   const currentMonth = new Date().getMonth()
 
   // Fetch WDFW Access Sites
@@ -259,28 +259,7 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
     debounceTimer.current = setTimeout(() => fetchWaterbodies(bounds), 600)
   }, [fetchWaterbodies])
 
-  // When selectedWaterbody changes, directly call setStyle on the affected layers
-  // instead of changing React state and re-rendering the entire GeoJSON layer
-  useEffect(() => {
-    const prev = prevSelectedRef.current                     // stored as lowercase
-    const next = selectedWaterbody ? selectedWaterbody.toLowerCase() : null
 
-    // Un-highlight previous selection
-    if (prev && layerMapRef.current[prev]) {
-      layerMapRef.current[prev].forEach(l => l.setStyle(getBaseStyle(l.feature)))
-    }
-
-    // Highlight new selection
-    if (next && layerMapRef.current[next]) {
-      layerMapRef.current[next].forEach(l => {
-        const p = l.feature.properties
-        const isRiver = p.waterway === 'river' || p.waterway === 'stream' || p.waterway === 'canal'
-        l.setStyle(isRiver ? SELECTED_STYLE_RIVER : SELECTED_STYLE_FILL)
-      })
-    }
-
-    prevSelectedRef.current = next  // store lowercase so it matches layerMapRef keys
-  }, [selectedWaterbody])
 
   const filteredGeoData = useMemo(() => {
     return {
@@ -300,12 +279,7 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
     }
   }, [geoData, filters])
 
-  // Clear the layer registry whenever filteredGeoData identity changes (GeoJSON remounts)
-  // Must be declared after filteredGeoData so the dependency is defined
-  useEffect(() => {
-    layerMapRef.current = {}
-    prevSelectedRef.current = null
-  }, [filteredGeoData])
+
 
   return (
     <div className="w-full h-full min-h-[500px] relative bg-[var(--bg-color)] overflow-hidden font-sans">
@@ -321,7 +295,11 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
         />
         
         <MapController onMoveEnd={handleMoveEnd} onReady={onMapReady} />
-        <MapClickHandler onMapClick={() => setSelectedWaterbody(null)} />
+        <MapClickHandler onMapClick={() => {
+          activeLayersRef.current.forEach(l => l.setStyle(getBaseStyle(l.feature)))
+          activeLayersRef.current = []
+          setSelectedWaterbody(null)
+        }} />
 
         {filteredGeoData && filteredGeoData.features?.length > 0 && (
           <GeoJSON 
@@ -329,36 +307,44 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
             data={filteredGeoData} 
             style={getBaseStyle}
             onEachFeature={(f, l) => {
-              const name = (f.properties.name || '').toLowerCase()
-              if (name) {
-                // O(1) registration using Set per name key — no linear scan
-                if (!layerMapRef.current[name]) layerMapRef.current[name] = new Set()
-                layerMapRef.current[name].add(l)
-                // If this feature is already selected (e.g. new tiles loaded), apply highlight immediately
-                if (selectedWaterbodyRef.current && name === selectedWaterbodyRef.current.toLowerCase()) {
-                  const p = f.properties
-                  const isRiver = p.waterway === 'river' || p.waterway === 'stream' || p.waterway === 'canal'
-                  l.setStyle(isRiver ? SELECTED_STYLE_RIVER : SELECTED_STYLE_FILL)
-                }
-              }
               l.on({
                 mouseover: (e) => {
-                  const isSelected = selectedWaterbodyRef.current && name === selectedWaterbodyRef.current.toLowerCase()
+                  const isSelected = selectedWaterbodyRef.current === (f.properties.name || null)
                   if (!isSelected) {
                     const base = getBaseStyle(f)
                     e.target.setStyle({ fillOpacity: (base.fillOpacity || 0) + 0.2, weight: (base.weight || 2) + 1 })
                   }
                 },
                 mouseout: (e) => {
-                  const isSelected = selectedWaterbodyRef.current && name === selectedWaterbodyRef.current.toLowerCase()
+                  const isSelected = selectedWaterbodyRef.current === (f.properties.name || null)
                   if (!isSelected) e.target.setStyle(getBaseStyle(f))
                 },
                 click: (e) => {
                   L.DomEvent.stopPropagation(e)
                   const clickedName = f.properties.name || null
-                  setSelectedWaterbody(prev => prev === clickedName ? null : clickedName)
+                  const isTogglingOff = selectedWaterbodyRef.current === clickedName
+
+                  // Un-highlight previously selected layers immediately
+                  activeLayersRef.current.forEach(prev => prev.setStyle(getBaseStyle(prev.feature)))
+                  activeLayersRef.current = []
+
+                  if (!isTogglingOff) {
+                    // Highlight all layers that share this name (multi-part waterbodies)
+                    const siblings = []
+                    e.target._map.eachLayer(layer => {
+                      if (layer.feature && (layer.feature.properties.name || null) === clickedName) {
+                        const p = layer.feature.properties
+                        const isRiver = p.waterway === 'river' || p.waterway === 'stream' || p.waterway === 'canal'
+                        layer.setStyle(isRiver ? SELECTED_STYLE_RIVER : SELECTED_STYLE_FILL)
+                        siblings.push(layer)
+                      }
+                    })
+                    activeLayersRef.current = siblings
+                  }
+
+                  setSelectedWaterbody(isTogglingOff ? null : clickedName)
                   if (onSelect) {
-                    const found = SITES_RAW.find(s => s.name.toLowerCase() === (f.properties.name || '').toLowerCase())
+                    const found = SITES_RAW.find(s => s.name.toLowerCase() === (clickedName || '').toLowerCase())
                     if (found) onSelect(found)
                   }
                   setSelectedFeature(f)
