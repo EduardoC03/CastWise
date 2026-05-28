@@ -121,6 +121,7 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
   const hotspotLayerRef = useRef(null)
   const debounceTimer = useRef(null)
   const highlightLayerRef = useRef(null)
+  const getFeatureStyleRef = useRef(null)
   const currentMonth = new Date().getMonth()
 
   // Fetch WDFW Access Sites
@@ -227,7 +228,7 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
     debounceTimer.current = setTimeout(() => fetchWaterbodies(bounds), 600)
   }
 
-  const getFeatureStyle = (feature) => {
+  const getFeatureStyle = useCallback((feature) => {
     const p = feature.properties
     const isRiver = p.waterway === 'river' || p.waterway === 'stream' || p.waterway === 'canal'
     const name = (p.name || '').toLowerCase()
@@ -237,12 +238,16 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
     const isSelected = selectedWaterbody && (p.name || '').toLowerCase() === selectedWaterbody.toLowerCase()
 
     if (isSelected) {
-      return { color: '#ff6b35', weight: 3, fillColor: '#ff6b35', fillOpacity: 0.45, dashArray: null }
+      if (isRiver) return { color: '#ff6b35', weight: 6, fillOpacity: 0, opacity: 1 }
+      return { color: '#ff6b35', weight: 3, fillColor: '#ff6b35', fillOpacity: 0.5, opacity: 1 }
     }
     if (isMarine) return { color: '#00b4b4', weight: 2, fillColor: '#00b4b4', fillOpacity: 0.18 }
     if (isRiver) return { color: '#1e78ff', weight: 3, fillOpacity: 0 }
     return { color: '#1e78ff', weight: 2, fillColor: '#1e78ff', fillOpacity: 0.25 }
-  }
+  }, [selectedWaterbody])
+
+  // Keep ref in sync so onEachFeature closures always call the latest style fn
+  getFeatureStyleRef.current = getFeatureStyle
 
   const filteredGeoData = useMemo(() => {
     return {
@@ -260,7 +265,7 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
         return true
       })
     }
-  }, [geoData, filters])
+  }, [geoData, filters, selectedWaterbody])
 
   return (
     <div className="w-full h-full min-h-[500px] relative bg-[var(--bg-color)] overflow-hidden font-sans">
@@ -286,13 +291,14 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
             onEachFeature={(f, l) => {
               l.on({
                 mouseover: (e) => {
-                  const isSelected = selectedWaterbody && (f.properties.name || '').toLowerCase() === selectedWaterbody.toLowerCase()
+                  const styleFn = getFeatureStyleRef.current
+                  const style = styleFn(f)
+                  const isSelected = style.opacity === 1 // selected items have opacity:1 set explicitly
                   if (!isSelected) {
-                    const style = getFeatureStyle(f);
-                    e.target.setStyle({ fillOpacity: (style.fillOpacity || 0) + 0.15, weight: style.weight + 1 });
+                    e.target.setStyle({ fillOpacity: (style.fillOpacity || 0) + 0.2, weight: (style.weight || 2) + 1 });
                   }
                 },
-                mouseout: (e) => e.target.setStyle(getFeatureStyle(f)),
+                mouseout: (e) => e.target.setStyle(getFeatureStyleRef.current(f)),
                 click: (e) => {
                   L.DomEvent.stopPropagation(e);
                   const clickedName = f.properties.name || null
