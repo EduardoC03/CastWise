@@ -253,17 +253,17 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
     }
   }, [loadedTiles, isWDFWWaterway])
 
-  const handleMoveEnd = (bounds, zoom) => {
+  const handleMoveEnd = useCallback((bounds, zoom) => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current)
     if (zoom < 8) return setLoading(false)
     debounceTimer.current = setTimeout(() => fetchWaterbodies(bounds), 600)
-  }
+  }, [fetchWaterbodies])
 
   // When selectedWaterbody changes, directly call setStyle on the affected layers
   // instead of changing React state and re-rendering the entire GeoJSON layer
   useEffect(() => {
-    const prev = prevSelectedRef.current
-    const next = selectedWaterbody
+    const prev = prevSelectedRef.current                     // stored as lowercase
+    const next = selectedWaterbody ? selectedWaterbody.toLowerCase() : null
 
     // Un-highlight previous selection
     if (prev && layerMapRef.current[prev]) {
@@ -279,11 +279,9 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
       })
     }
 
-    prevSelectedRef.current = next
+    prevSelectedRef.current = next  // store lowercase so it matches layerMapRef keys
   }, [selectedWaterbody])
 
-  // filteredGeoData no longer needs selectedWaterbody as a dep — highlighting
-  // is handled imperatively above, not via a key/re-render
   const filteredGeoData = useMemo(() => {
     return {
       type: 'FeatureCollection',
@@ -301,6 +299,13 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
       })
     }
   }, [geoData, filters])
+
+  // Clear the layer registry whenever filteredGeoData identity changes (GeoJSON remounts)
+  // Must be declared after filteredGeoData so the dependency is defined
+  useEffect(() => {
+    layerMapRef.current = {}
+    prevSelectedRef.current = null
+  }, [filteredGeoData])
 
   return (
     <div className="w-full h-full min-h-[500px] relative bg-[var(--bg-color)] overflow-hidden font-sans">
@@ -326,11 +331,11 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
             onEachFeature={(f, l) => {
               const name = (f.properties.name || '').toLowerCase()
               if (name) {
-                // Use a WeakSet per name to avoid duplicate layer registration
-                if (!layerMapRef.current[name]) layerMapRef.current[name] = []
-                if (!layerMapRef.current[name].includes(l)) layerMapRef.current[name].push(l)
+                // O(1) registration using Set per name key — no linear scan
+                if (!layerMapRef.current[name]) layerMapRef.current[name] = new Set()
+                layerMapRef.current[name].add(l)
                 // If this feature is already selected (e.g. new tiles loaded), apply highlight immediately
-                if (selectedWaterbody && name === selectedWaterbody.toLowerCase()) {
+                if (selectedWaterbodyRef.current && name === selectedWaterbodyRef.current.toLowerCase()) {
                   const p = f.properties
                   const isRiver = p.waterway === 'river' || p.waterway === 'stream' || p.waterway === 'canal'
                   l.setStyle(isRiver ? SELECTED_STYLE_RIVER : SELECTED_STYLE_FILL)
