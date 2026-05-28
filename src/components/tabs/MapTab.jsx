@@ -52,6 +52,11 @@ const WDFW_WATERWAY_WHITELIST = [
   "Discovery Bay", "Sequim Bay", "Dungeness Bay", "Neah Bay", "La Push", "Westport", "Pacific Ocean Washington Coast"
 ];
 
+// Pre-build a lowercase Set for O(1) whitelist lookups instead of looping every time
+const WHITELIST_SET = new Set(WDFW_WATERWAY_WHITELIST.map(n => n.toLowerCase()))
+
+const REJECT_TERMS = ['golf','country club','resort','pool','fountain','retention','detention','storm','irrigation','wastewater','drainage','ditch','sewage','canal']
+
 // --- UTILITIES ---
 
 const getTilesInView = (bounds) => {
@@ -67,6 +72,20 @@ const getTilesInView = (bounds) => {
   }
   return tiles
 }
+
+const getBaseStyle = (feature) => {
+  const p = feature.properties
+  const isRiver = p.waterway === 'river' || p.waterway === 'stream' || p.waterway === 'canal'
+  const name = (p.name || '').toLowerCase()
+  const isMarine = p.place === 'sea' || p.place === 'bay' || p.place === 'sound' || p.place === 'harbor' ||
+                   name.includes('sound') || name.includes('harbor') || name.includes('bay') || name.includes('strait') || name.includes('ocean')
+  if (isMarine) return { color: '#00b4b4', weight: 2, fillColor: '#00b4b4', fillOpacity: 0.18 }
+  if (isRiver)  return { color: '#1e78ff', weight: 3, fillOpacity: 0 }
+  return { color: '#1e78ff', weight: 2, fillColor: '#1e78ff', fillOpacity: 0.25 }
+}
+
+const SELECTED_STYLE_FILL   = { color: '#ff6b35', weight: 3, fillColor: '#ff6b35', fillOpacity: 0.5, opacity: 1 }
+const SELECTED_STYLE_RIVER  = { color: '#ff6b35', weight: 6, fillOpacity: 0, opacity: 1 }
 
 // --- MAP COMPONENTS ---
 
@@ -114,14 +133,14 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
     hotspots: true,
     selectedSpecies: 'all'
   })
-
   const [selectedWaterbody, setSelectedWaterbody] = useState(null)
 
   const mapRef = useRef(null)
-  const hotspotLayerRef = useRef(null)
   const debounceTimer = useRef(null)
-  const highlightLayerRef = useRef(null)
-  const getFeatureStyleRef = useRef(null)
+  // Tracks Leaflet layer objects by feature OSM id for direct setStyle — no re-render needed
+  const layerMapRef = useRef({})
+  // Tracks the previous selection so we can un-highlight it without re-rendering
+  const prevSelectedRef = useRef(null)
   const currentMonth = new Date().getMonth()
 
   // Fetch WDFW Access Sites
@@ -151,28 +170,31 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
   }, [])
 
   const isWDFWWaterway = useCallback((featureName) => {
-    if (!featureName || featureName.trim() === '') return false;
-    const name = featureName.toLowerCase().trim();
+    if (!featureName || featureName.trim() === '') return false
+    const name = featureName.toLowerCase().trim()
 
-    const rejectTerms = ['golf','country club','resort','pool','fountain','retention','detention','storm','irrigation','wastewater','drainage','ditch','sewage','canal'];
-    if (rejectTerms.some(t => name.includes(t))) return false;
+    if (REJECT_TERMS.some(t => name.includes(t))) return false
 
+    // O(1) exact match first
+    if (WHITELIST_SET.has(name)) return true
+
+    // Partial match against whitelist (e.g. "Columbia River (Bonneville)")
+    for (const allowed of WHITELIST_SET) {
+      if (name.includes(allowed) || allowed.includes(name)) return true
+    }
+
+    // Dynamic WDFW names from API
     if (wdfwWaterNames.size > 0) {
       for (const wdfwName of wdfwWaterNames) {
-        if (name.includes(wdfwName) || wdfwName.includes(name)) return true;
+        if (name.includes(wdfwName) || wdfwName.includes(name)) return true
       }
     }
 
-    for (const allowed of WDFW_WATERWAY_WHITELIST) {
-      const lowerAllowed = allowed.toLowerCase();
-      if (name.includes(lowerAllowed) || lowerAllowed.includes(name)) return true;
-    }
-
-    return false;
+    return false
   }, [wdfwWaterNames])
 
   const onMapReady = useCallback((map) => {
-    mapRef.current = map;
+    mapRef.current = map
   }, [])
 
   const fetchWaterbodies = useCallback(async (bounds) => {
@@ -186,16 +208,17 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
     setLoadedTiles(updatedTiles)
 
     const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`
+    // Use `out geom` instead of `>; out skel qt` — returns geometry inline, no second round-trip for nodes
     const query = `
       [out:json][timeout:60];
       (
         way["natural"="water"]["name"](${bbox});
         relation["natural"="water"]["name"](${bbox});
-        way["waterway"~"river|stream|canal"]["name"](${bbox});
+        way["waterway"~"river|stream"]["name"](${bbox});
         way["place"~"sea|bay|sound|harbor"]["name"](${bbox});
         relation["place"~"sea|bay|sound|harbor"]["name"](${bbox});
       );
-      out body; >; out skel qt;
+      out geom qt;
     `
 
     try {
@@ -211,10 +234,18 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
         return isWDFWWaterway(name)
       })
 
-      setGeoData(prev => ({
-        type: 'FeatureCollection',
-        features: [...prev.features, ...filteredFeatures]
-      }))
+      if (filteredFeatures.length === 0) return
+
+      setGeoData(prev => {
+        // Deduplicate by OSM id to avoid re-rendering duplicate polygons on pan
+        const existingIds = new Set(prev.features.map(f => f.id))
+        const newFeatures = filteredFeatures.filter(f => !existingIds.has(f.id))
+        if (newFeatures.length === 0) return prev
+        return {
+          type: 'FeatureCollection',
+          features: [...prev.features, ...newFeatures]
+        }
+      })
     } catch (err) {
       console.error('Overpass fetch error:', err)
     } finally {
@@ -228,27 +259,31 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
     debounceTimer.current = setTimeout(() => fetchWaterbodies(bounds), 600)
   }
 
-  const getFeatureStyle = useCallback((feature) => {
-    const p = feature.properties
-    const isRiver = p.waterway === 'river' || p.waterway === 'stream' || p.waterway === 'canal'
-    const name = (p.name || '').toLowerCase()
-    const isMarine = p.place === 'sea' || p.place === 'bay' || p.place === 'sound' || p.place === 'harbor' || 
-                     name.includes('sound') || name.includes('harbor') || name.includes('bay') || name.includes('strait') || name.includes('ocean');
+  // When selectedWaterbody changes, directly call setStyle on the affected layers
+  // instead of changing React state and re-rendering the entire GeoJSON layer
+  useEffect(() => {
+    const prev = prevSelectedRef.current
+    const next = selectedWaterbody
 
-    const isSelected = selectedWaterbody && (p.name || '').toLowerCase() === selectedWaterbody.toLowerCase()
-
-    if (isSelected) {
-      if (isRiver) return { color: '#ff6b35', weight: 6, fillOpacity: 0, opacity: 1 }
-      return { color: '#ff6b35', weight: 3, fillColor: '#ff6b35', fillOpacity: 0.5, opacity: 1 }
+    // Un-highlight previous selection
+    if (prev && layerMapRef.current[prev]) {
+      layerMapRef.current[prev].forEach(l => l.setStyle(getBaseStyle(l.feature)))
     }
-    if (isMarine) return { color: '#00b4b4', weight: 2, fillColor: '#00b4b4', fillOpacity: 0.18 }
-    if (isRiver) return { color: '#1e78ff', weight: 3, fillOpacity: 0 }
-    return { color: '#1e78ff', weight: 2, fillColor: '#1e78ff', fillOpacity: 0.25 }
+
+    // Highlight new selection
+    if (next && layerMapRef.current[next]) {
+      layerMapRef.current[next].forEach(l => {
+        const p = l.feature.properties
+        const isRiver = p.waterway === 'river' || p.waterway === 'stream' || p.waterway === 'canal'
+        l.setStyle(isRiver ? SELECTED_STYLE_RIVER : SELECTED_STYLE_FILL)
+      })
+    }
+
+    prevSelectedRef.current = next
   }, [selectedWaterbody])
 
-  // Keep ref in sync so onEachFeature closures always call the latest style fn
-  getFeatureStyleRef.current = getFeatureStyle
-
+  // filteredGeoData no longer needs selectedWaterbody as a dep — highlighting
+  // is handled imperatively above, not via a key/re-render
   const filteredGeoData = useMemo(() => {
     return {
       type: 'FeatureCollection',
@@ -256,8 +291,8 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
         const p = f.properties
         const isRiver = p.waterway === 'river' || p.waterway === 'stream' || p.waterway === 'canal'
         const name = (p.name || '').toLowerCase()
-        const isMarine = p.place === 'sea' || p.place === 'bay' || p.place === 'sound' || p.place === 'harbor' || 
-                         name.includes('sound') || name.includes('harbor') || name.includes('bay') || name.includes('strait') || name.includes('ocean');
+        const isMarine = p.place === 'sea' || p.place === 'bay' || p.place === 'sound' || p.place === 'harbor' ||
+                         name.includes('sound') || name.includes('harbor') || name.includes('bay') || name.includes('strait') || name.includes('ocean')
         const isLake = !isRiver && !isMarine
         if (isLake && !filters.lakes) return false
         if (isRiver && !filters.rivers) return false
@@ -265,7 +300,7 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
         return true
       })
     }
-  }, [geoData, filters, selectedWaterbody])
+  }, [geoData, filters])
 
   return (
     <div className="w-full h-full min-h-[500px] relative bg-[var(--bg-color)] overflow-hidden font-sans">
@@ -285,26 +320,44 @@ export default function MapTab({ onSelect, filteredSites = [] }) {
 
         {filteredGeoData && filteredGeoData.features?.length > 0 && (
           <GeoJSON 
-            key={`geo-${filteredGeoData.features.length}-${filters.lakes}-${filters.rivers}-${filters.marine}-${selectedWaterbody}`}
+            key={`geo-${filteredGeoData.features.length}-${filters.lakes}-${filters.rivers}-${filters.marine}`}
             data={filteredGeoData} 
-            style={getFeatureStyle} 
+            style={getBaseStyle}
             onEachFeature={(f, l) => {
+              // Register this layer under its name for direct imperative style updates
+              const name = (f.properties.name || '').toLowerCase()
+              if (name) {
+                if (!layerMapRef.current[name]) layerMapRef.current[name] = []
+                layerMapRef.current[name].push(l)
+                // If this feature is already selected (e.g. new tiles loaded), apply highlight immediately
+                if (selectedWaterbody && name === selectedWaterbody.toLowerCase()) {
+                  const p = f.properties
+                  const isRiver = p.waterway === 'river' || p.waterway === 'stream' || p.waterway === 'canal'
+                  l.setStyle(isRiver ? SELECTED_STYLE_RIVER : SELECTED_STYLE_FILL)
+                }
+              }
               l.on({
                 mouseover: (e) => {
-                  const styleFn = getFeatureStyleRef.current
-                  const style = styleFn(f)
-                  const isSelected = style.opacity === 1 // selected items have opacity:1 set explicitly
+                  // Only add hover effect if not currently selected
+                  const isSelected = selectedWaterbody && name === selectedWaterbody.toLowerCase()
                   if (!isSelected) {
-                    e.target.setStyle({ fillOpacity: (style.fillOpacity || 0) + 0.2, weight: (style.weight || 2) + 1 });
+                    const base = getBaseStyle(f)
+                    e.target.setStyle({ fillOpacity: (base.fillOpacity || 0) + 0.2, weight: (base.weight || 2) + 1 })
                   }
                 },
-                mouseout: (e) => e.target.setStyle(getFeatureStyleRef.current(f)),
+                mouseout: (e) => {
+                  const isSelected = selectedWaterbody && name === selectedWaterbody.toLowerCase()
+                  if (!isSelected) e.target.setStyle(getBaseStyle(f))
+                },
                 click: (e) => {
-                  L.DomEvent.stopPropagation(e);
+                  L.DomEvent.stopPropagation(e)
                   const clickedName = f.properties.name || null
                   setSelectedWaterbody(prev => prev === clickedName ? null : clickedName)
-                  if (onSelect) { const found = SITES_RAW.find(s => s.name.toLowerCase() === f.properties.name.toLowerCase()); if (found) onSelect(found); }
-                  setSelectedFeature(f);
+                  if (onSelect) {
+                    const found = SITES_RAW.find(s => s.name.toLowerCase() === (f.properties.name || '').toLowerCase())
+                    if (found) onSelect(found)
+                  }
+                  setSelectedFeature(f)
                 }
               })
             }}
