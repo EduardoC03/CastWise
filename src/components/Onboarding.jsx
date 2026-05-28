@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronRight, ChevronLeft, Check, Fish } from 'lucide-react';
+import welcomeBg from '../assets/welcome-bg.jpg';
 
 const SLIDES = [
   { id: 'welcome',    type: 'welcome' },
@@ -15,7 +16,7 @@ const SLIDES = [
 ];
 
 // ── Welcome background — place welcome-bg.jpg in your /public folder ────────
-const WELCOME_PHOTO = '/welcome-bg.jpg';
+const WELCOME_PHOTO = welcomeBg;
 
 // ── Mountain silhouette SVG layers for name + question slides ─────────────────
 function MountainBg() {
