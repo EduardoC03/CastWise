@@ -189,7 +189,7 @@ export default function Onboarding({ onComplete }) {
             fontFamily: 'var(--font-display)',
             fontSize: 'clamp(64px, 10vw, 96px)',
             fontWeight: 700,
-            color: '#0f172a',
+            color: '#ffffff',
             letterSpacing: '-0.03em',
             lineHeight: 1,
             marginBottom: 8,
