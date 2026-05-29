@@ -42,10 +42,7 @@ export default function Sidebar({ profile, onNavigate }) {
   const topSite = top[0]?.site || null;
 
   const [catchInput, setCatchInput]   = useState('');
-  const [catches, setCatches]         = useState([
-    { id: 1, species: 'Rainbow Trout',   date: '2 days ago' },
-    { id: 2, species: 'Cutthroat Trout', date: 'Last week'  },
-  ]);
+  const [catches, setCatches]         = useState([]);
   const [weather, setWeather]         = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
 
@@ -72,7 +69,7 @@ export default function Sidebar({ profile, onNavigate }) {
 
   const addCatch = () => {
     if (!catchInput.trim()) return;
-    setCatches(prev => [{ id: Date.now(), species: catchInput.trim(), date: 'Just now' }, ...prev.slice(0, 2)]);
+    setCatches(prev => [{ id: Date.now(), species: catchInput.trim(), date: 'Just now' }, ...prev]);
     setCatchInput('');
   };
 
