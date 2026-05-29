@@ -24,7 +24,7 @@ function scoreSite(site, profile) {
   return Math.min(score, 99);
 }
 
-function getRecommendations(profile, sites) {
+export function getRecommendations(profile, sites) {
   if (!sites || sites.length === 0) return { top: [], explore: null, totalScored: 0 };
   const scored = sites
     .filter(s => s.closure !== 'Closed')
