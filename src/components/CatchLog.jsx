@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
 import { Fish, Plus, Trash2, MapPin, Calendar } from 'lucide-react';
 
-const SAMPLE = [
-  { id: 1, species: 'Rainbow Trout', weight: '2.4 lbs', location: 'Pass Lake',    date: 'May 24, 2026' },
-  { id: 2, species: 'Cutthroat',     weight: '1.1 lbs', location: 'Skykomish River', date: 'May 18, 2026' },
-];
+
 
 export default function CatchLog() {
-  const [catches, setCatches] = useState(SAMPLE);
-  const [form,    setForm]    = useState({ species: '', weight: '', location: '', date: '' });
+  const [catches, setCatches] = useState([]);
+  const [form,    setForm]    = useState({ species: '', weight: '', length: '', location: '', date: '' });
   const [adding,  setAdding]  = useState(false);
 
   const handleAdd = () => {
@@ -17,10 +14,11 @@ export default function CatchLog() {
       id:       Date.now(),
       species:  form.species.trim(),
       weight:   form.weight.trim()   || '—',
+      length:   form.length.trim()   || '—',
       location: form.location.trim() || '—',
       date:     form.date            || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
     }, ...prev]);
-    setForm({ species: '', weight: '', location: '', date: '' });
+    setForm({ species: '', weight: '', length: '', location: '', date: '' });
     setAdding(false);
   };
 
@@ -51,9 +49,10 @@ export default function CatchLog() {
           <div className="cw-block-title">New Catch</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
             {[
-              { key: 'species',  placeholder: 'Species *',       required: true  },
-              { key: 'weight',   placeholder: 'Weight (e.g. 2.4 lbs)', required: false },
-              { key: 'location', placeholder: 'Location',        required: false },
+              { key: 'species',  placeholder: 'Species *',              required: true  },
+              { key: 'weight',   placeholder: 'Weight (e.g. 2.4 lbs)',   required: false },
+              { key: 'length',   placeholder: 'Length (e.g. 14 in)',      required: false },
+              { key: 'location', placeholder: 'Location',                required: false },
               { key: 'date',     placeholder: 'Date (optional)', required: false, type: 'date' },
             ].map(({ key, placeholder, type = 'text' }) => (
               <input
@@ -136,6 +135,17 @@ export default function CatchLog() {
                       fontWeight: 400,
                     }}>
                       {c.weight}
+                    </span>
+                  )}
+                  {c.length !== '—' && (
+                    <span style={{
+                      marginLeft: 6,
+                      fontSize: 12,
+                      fontFamily: 'var(--font-mono)',
+                      color: 'var(--gold-soft)',
+                      fontWeight: 400,
+                    }}>
+                      · {c.length}
                     </span>
                   )}
                 </div>
