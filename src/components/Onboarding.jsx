@@ -14,8 +14,9 @@ const SLIDES = [
   { id: 'completion', type: 'completion' },
 ];
 
-// Place welcome-bg.jpg in your /public folder
-const WELCOME_PHOTO = '/welcome-bg.jpg';
+// Background image from src/assets
+import welcomeBg from '../assets/welcome-bg.jpg';
+const WELCOME_PHOTO = welcomeBg;
 
 // ── Mountain silhouette SVG for question slides ───────────────────────────────
 function MountainBg() {
