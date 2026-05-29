@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Cloud, Droplets, Thermometer, Wind, Trophy, ChevronRight, Plus, Fish, Loader2 } from 'lucide-react';
+import { getRecommendations } from './SiteRanking';
+import { SITES } from '../data/sites';
 
 const REGION_COORDS = {
   'Northwest WA': { lat: 48.7519, lng: -122.4787 },
@@ -35,7 +37,10 @@ const personalizedLine = (profile) => {
   return `Finding the best ${style} spots in ${region} for this weekend.`;
 };
 
-export default function Sidebar({ profile, topSite, onNavigate }) {
+export default function Sidebar({ profile, onNavigate }) {
+  const { top } = getRecommendations(profile, SITES);
+  const topSite = top[0]?.site || null;
+
   const [catchInput, setCatchInput]   = useState('');
   const [catches, setCatches]         = useState([
     { id: 1, species: 'Rainbow Trout',   date: '2 days ago' },
