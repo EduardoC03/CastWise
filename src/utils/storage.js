@@ -1,5 +1,20 @@
 const PROFILE_KEY = 'castwise:profile';
 const TRIP_KEY = 'castwise:trip';
+const API_KEY = 'castwise:apikey';
+
+export async function loadApiKey() {
+  try {
+    const r = await window.storage.get(API_KEY);
+    return r ? r.value : null;
+  } catch { return null; }
+}
+
+export async function saveApiKey(key) {
+  try {
+    if (!key) await window.storage.delete(API_KEY);
+    else await window.storage.set(API_KEY, key);
+  } catch (e) { console.error(e); }
+}
 
 export async function loadProfile() {
   try {
