@@ -26,7 +26,7 @@ export default function NavBar({ activeSection, onSectionChange, theme, onToggle
   }, []);
 
   return (
-    <nav className="cw-nav">
+    <nav className="cw-nav" style={{ position: 'relative', zIndex: 1100 }}>
       {/* Logo */}
       <div className="cw-nav-logo" onClick={() => onSectionChange('map')}>
         <div className="cw-nav-logo-icon">
@@ -61,7 +61,7 @@ export default function NavBar({ activeSection, onSectionChange, theme, onToggle
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
         </button>
 
-        <div style={{ position: 'relative', zIndex: 1000 }} ref={menuRef}>
+        <div style={{ position: 'relative', zIndex: 1100 }} ref={menuRef}>
           <button
             className="cw-avatar-btn"
             onClick={() => setMenuOpen(o => !o)}
