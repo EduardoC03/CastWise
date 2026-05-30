@@ -22,15 +22,14 @@ const PROFILE_KEY = 'castwise_profile';
 const THEME_KEY = 'castwise_theme';
 
 export default function CastWise() {
-  const [appState, setAppState] = useState('loading'); // 'loading' | 'onboarding' | 'dashboard'
+  const [appState, setAppState] = useState('loading');
   const [profile, setProfile] = useState(null);
   const [trip, setTrip] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'dark');
-  const [activeSection, setActiveSection] = useState('rankings'); // land on rankings, not map
+  const [activeSection, setActiveSection] = useState('rankings');
   const [selectedSite, setSelectedSite] = useState(null);
   const [isSiteView, setIsSiteView] = useState(false);
 
-  // Load profile and trip on mount
   useEffect(() => {
     const savedProfile = localStorage.getItem(PROFILE_KEY);
     if (savedProfile) {
@@ -40,14 +39,12 @@ export default function CastWise() {
     } else {
       setAppState('onboarding');
     }
-
     (async () => {
       const t = await loadTrip();
       if (t) setTrip(t);
     })();
   }, []);
 
-  // Apply theme class to body
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem(THEME_KEY, theme);
@@ -97,10 +94,24 @@ export default function CastWise() {
     return <Onboarding onComplete={handleOnboardingComplete} />;
   }
 
-  // Compute the user's #1 pick once, here, so the Sidebar can show it.
-  const topPick = profile
-    ? getRecommendations(profile, SITES).top[0]?.site
-    : null;
+  // ---- Compute recommendations once for this render ----
+  // Used by: Sidebar (top pick), Map (highlighted sites + popup labels).
+  const recommendations = profile ? getRecommendations(profile, SITES) : null;
+  const topPick = recommendations?.top[0]?.site || null;
+
+  // Highlighted site IDs = top 3 + explore pick + planned trip site (if any).
+  // The map uses this to know which sites to render in gold and which water
+  // bodies to overlay.
+  const highlightedIds = new Set();
+  if (recommendations?.top) {
+    recommendations.top.forEach(r => highlightedIds.add(r.site.id));
+  }
+  if (recommendations?.explore?.site) {
+    highlightedIds.add(recommendations.explore.site.id);
+  }
+  if (trip?.site?.id) {
+    highlightedIds.add(trip.site.id);
+  }
 
   const renderMainContent = () => {
     if (isSiteView && selectedSite) {
@@ -116,7 +127,13 @@ export default function CastWise() {
 
     switch (activeSection) {
       case 'map':
-        return <MapTab onSelect={handleSelectSite} />;
+        return (
+          <MapTab
+            onSelect={handleSelectSite}
+            highlightedIds={highlightedIds}
+            recommendations={recommendations}
+          />
+        );
       case 'rankings':
         return (
           <SiteRanking
