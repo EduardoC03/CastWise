@@ -42,6 +42,8 @@ export default function Sidebar({ profile, onNavigate }) {
   const topSite = top[0]?.site || null;
 
   const [catchInput, setCatchInput]   = useState('');
+  const [catchDesc,  setCatchDesc]    = useState('');
+  const [showCatchForm, setShowCatchForm] = useState(false);
   const [catches, setCatches]         = useState([]);
   const [weather, setWeather]         = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
@@ -67,10 +69,19 @@ export default function Sidebar({ profile, onNavigate }) {
       .finally(() => setWeatherLoading(false));
   }, [profile?.region]);
 
+  const wordCount = (str) => str.trim() === '' ? 0 : str.trim().split(/\s+/).length;
+
   const addCatch = () => {
     if (!catchInput.trim()) return;
-    setCatches(prev => [{ id: Date.now(), species: catchInput.trim(), date: 'Just now' }, ...prev]);
+    setCatches(prev => [{
+      id:      Date.now(),
+      species: catchInput.trim(),
+      desc:    catchDesc.trim() || '',
+      date:    'Just now',
+    }, ...prev]);
     setCatchInput('');
+    setCatchDesc('');
+    setShowCatchForm(false);
   };
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -177,18 +188,70 @@ export default function Sidebar({ profile, onNavigate }) {
           <Fish size={10} />
           Catch Log
         </div>
-        <div className="cw-catch-input-row">
-          <input
-            className="cw-catch-input"
-            placeholder="What'd you catch?"
-            value={catchInput}
-            onChange={e => setCatchInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addCatch()}
-          />
-          <button className="cw-catch-add-btn" type="button" onClick={addCatch}>
-            <Plus size={14} />
+
+        {!showCatchForm ? (
+          <button
+            className="cw-catch-add-btn"
+            type="button"
+            onClick={() => setShowCatchForm(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, background: 'none', border: '1px solid var(--border)', borderRadius: 7, padding: '7px 12px', cursor: 'pointer', color: 'var(--text-2)', fontSize: 12, fontFamily: 'var(--font-sans)', width: '100%' }}
+          >
+            <Plus size={13} /> Log a catch
           </button>
-        </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+            <input
+              className="cw-catch-input"
+              placeholder="Fish name *"
+              value={catchInput}
+              onChange={e => setCatchInput(e.target.value)}
+              style={{ width: '100%' }}
+            />
+            <div>
+              <textarea
+                placeholder="Description (optional, 100-word limit)"
+                value={catchDesc}
+                onChange={e => {
+                  const words = e.target.value.trim() === '' ? [] : e.target.value.trim().split(/\s+/);
+                  if (words.length <= 100) setCatchDesc(e.target.value);
+                }}
+                rows={3}
+                style={{
+                  width: '100%', resize: 'vertical',
+                  background: 'var(--bg-raised)', border: '1px solid var(--border)',
+                  borderRadius: 7, padding: '8px 10px', fontSize: 12,
+                  fontFamily: 'var(--font-sans)', color: 'var(--text)',
+                  outline: 'none', boxSizing: 'border-box',
+                }}
+                onFocus={e  => e.target.style.borderColor = 'var(--gold)'}
+                onBlur={e   => e.target.style.borderColor = 'var(--border)'}
+              />
+              <div style={{ fontSize: 10, color: wordCount(catchDesc) >= 100 ? 'var(--danger)' : 'var(--text-3)', textAlign: 'right', marginTop: 2 }}>
+                {wordCount(catchDesc)} / 100 words
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                type="button"
+                onClick={addCatch}
+                disabled={!catchInput.trim()}
+                className="cw-btn cw-btn-primary"
+                style={{ fontSize: 12, padding: '6px 12px' }}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowCatchForm(false); setCatchInput(''); setCatchDesc(''); }}
+                className="cw-btn cw-btn-ghost"
+                style={{ fontSize: 12, padding: '6px 12px' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {catches.map(c => (
             <div key={c.id} className="cw-catch-item">
@@ -197,6 +260,7 @@ export default function Sidebar({ profile, onNavigate }) {
               </div>
               <div>
                 <div className="cw-catch-species">{c.species}</div>
+                {c.desc && <div className="cw-catch-date" style={{ marginTop: 2 }}>{c.desc}</div>}
                 <div className="cw-catch-date">{c.date}</div>
               </div>
             </div>
