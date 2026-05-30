@@ -43,7 +43,7 @@ export default function MapView({ profile, trip, onSelect, onViewTrip, onReset }
       </div>
 
       {tab === 'map' && (
-        <div className="cw-map-layout">
+        <div className="cw-map-layout" style={{ position: 'relative', zIndex: 0 }}>
           <div className="cw-map-atlas-container">
             <MapTab onSelect={onSelect} filteredSites={filtered} />
           </div>
