@@ -61,7 +61,7 @@ export default function NavBar({ activeSection, onSectionChange, theme, onToggle
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
         </button>
 
-        <div style={{ position: 'relative' }} ref={menuRef}>
+        <div style={{ position: 'relative', zIndex: 1000 }} ref={menuRef}>
           <button
             className="cw-avatar-btn"
             onClick={() => setMenuOpen(o => !o)}
