@@ -41,10 +41,11 @@ export default function Sidebar({ profile, onNavigate }) {
   const { top } = getRecommendations(profile, SITES);
   const topSite = top[0]?.site || null;
 
-  const [catchInput, setCatchInput]   = useState('');
-  const [catchDesc,  setCatchDesc]    = useState('');
+  const EMPTY_FORM = { species: '', weight: '', size: '', location: '', date: '', gear: '' };
   const [showCatchForm, setShowCatchForm] = useState(false);
-  const [catches, setCatches]         = useState([]);
+  const [catchForm,     setCatchForm]     = useState(EMPTY_FORM);
+  const [catches,       setCatches]       = useState([]);
+  const [editingId,     setEditingId]     = useState(null);
   const [weather, setWeather]         = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
 
@@ -69,20 +70,21 @@ export default function Sidebar({ profile, onNavigate }) {
       .finally(() => setWeatherLoading(false));
   }, [profile?.region]);
 
-  const wordCount = (str) => str.trim() === '' ? 0 : str.trim().split(/\s+/).length;
+  const openNewForm = () => { setCatchForm(EMPTY_FORM); setEditingId(null); setShowCatchForm(true); };
+  const openEditForm = (c) => { setCatchForm({ species: c.species, weight: c.weight, size: c.size, location: c.location, date: c.date, gear: c.gear }); setEditingId(c.id); setShowCatchForm(true); };
+  const cancelForm = () => { setShowCatchForm(false); setEditingId(null); setCatchForm(EMPTY_FORM); };
 
-  const addCatch = () => {
-    if (!catchInput.trim()) return;
-    setCatches(prev => [{
-      id:      Date.now(),
-      species: catchInput.trim(),
-      desc:    catchDesc.trim() || '',
-      date:    'Just now',
-    }, ...prev]);
-    setCatchInput('');
-    setCatchDesc('');
-    setShowCatchForm(false);
+  const saveCatch = () => {
+    if (!catchForm.species.trim()) return;
+    if (editingId !== null) {
+      setCatches(prev => prev.map(c => c.id === editingId ? { ...c, ...catchForm, species: catchForm.species.trim() } : c));
+    } else {
+      setCatches(prev => [{ id: Date.now(), ...catchForm, species: catchForm.species.trim(), loggedAt: 'Just now' }, ...prev]);
+    }
+    cancelForm();
   };
+
+  const deleteCatch = (id) => setCatches(prev => prev.filter(c => c.id !== id));
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
@@ -191,58 +193,44 @@ export default function Sidebar({ profile, onNavigate }) {
 
         {!showCatchForm ? (
           <button
-            className="cw-catch-add-btn"
             type="button"
-            onClick={() => setShowCatchForm(true)}
+            onClick={openNewForm}
             style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, background: 'none', border: '1px solid var(--border)', borderRadius: 7, padding: '7px 12px', cursor: 'pointer', color: 'var(--text-2)', fontSize: 12, fontFamily: 'var(--font-sans)', width: '100%' }}
           >
             <Plus size={13} /> Log a catch
           </button>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
-            <input
-              className="cw-catch-input"
-              placeholder="Fish name *"
-              value={catchInput}
-              onChange={e => setCatchInput(e.target.value)}
-              style={{ width: '100%' }}
-            />
-            <div>
-              <textarea
-                placeholder="Description (optional, 100-word limit)"
-                value={catchDesc}
-                onChange={e => {
-                  const words = e.target.value.trim() === '' ? [] : e.target.value.trim().split(/\s+/);
-                  if (words.length <= 100) setCatchDesc(e.target.value);
-                }}
-                rows={3}
-                style={{
-                  width: '100%', resize: 'vertical',
-                  background: 'var(--bg-raised)', border: '1px solid var(--border)',
-                  borderRadius: 7, padding: '8px 10px', fontSize: 12,
-                  fontFamily: 'var(--font-sans)', color: 'var(--text)',
-                  outline: 'none', boxSizing: 'border-box',
-                }}
-                onFocus={e  => e.target.style.borderColor = 'var(--gold)'}
-                onBlur={e   => e.target.style.borderColor = 'var(--border)'}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 10 }}>
+            {[
+              { key: 'species',  placeholder: 'Fish name *',             required: true  },
+              { key: 'weight',   placeholder: 'Weight (e.g. 2.4 lbs)',   required: false },
+              { key: 'size',     placeholder: 'Size (e.g. 14 in)',        required: false },
+              { key: 'location', placeholder: 'Where it was caught',      required: false },
+              { key: 'date',     placeholder: 'Date caught',              required: false },
+              { key: 'gear',     placeholder: 'Gear used',                required: false },
+            ].map(({ key, placeholder }) => (
+              <input
+                key={key}
+                className="cw-catch-input"
+                placeholder={placeholder}
+                value={catchForm[key]}
+                onChange={e => setCatchForm(f => ({ ...f, [key]: e.target.value }))}
+                style={{ width: '100%' }}
               />
-              <div style={{ fontSize: 10, color: wordCount(catchDesc) >= 100 ? 'var(--danger)' : 'var(--text-3)', textAlign: 'right', marginTop: 2 }}>
-                {wordCount(catchDesc)} / 100 words
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
+            ))}
+            <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
               <button
                 type="button"
-                onClick={addCatch}
-                disabled={!catchInput.trim()}
+                onClick={saveCatch}
+                disabled={!catchForm.species.trim()}
                 className="cw-btn cw-btn-primary"
                 style={{ fontSize: 12, padding: '6px 12px' }}
               >
-                Save
+                {editingId !== null ? 'Update' : 'Save'}
               </button>
               <button
                 type="button"
-                onClick={() => { setShowCatchForm(false); setCatchInput(''); setCatchDesc(''); }}
+                onClick={cancelForm}
                 className="cw-btn cw-btn-ghost"
                 style={{ fontSize: 12, padding: '6px 12px' }}
               >
@@ -252,16 +240,42 @@ export default function Sidebar({ profile, onNavigate }) {
           </div>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {catches.map(c => (
-            <div key={c.id} className="cw-catch-item">
-              <div className="cw-catch-fish-icon">
+            <div key={c.id} className="cw-catch-item" style={{ alignItems: 'flex-start' }}>
+              <div className="cw-catch-fish-icon" style={{ marginTop: 2 }}>
                 <Fish size={13} />
               </div>
-              <div>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="cw-catch-species">{c.species}</div>
-                {c.desc && <div className="cw-catch-date" style={{ marginTop: 2 }}>{c.desc}</div>}
-                <div className="cw-catch-date">{c.date}</div>
+                {c.weight   && <div className="cw-catch-date">Weight: {c.weight}</div>}
+                {c.size     && <div className="cw-catch-date">Size: {c.size}</div>}
+                {c.location && <div className="cw-catch-date">Spot: {c.location}</div>}
+                {c.date     && <div className="cw-catch-date">Date: {c.date}</div>}
+                {c.gear     && <div className="cw-catch-date">Gear: {c.gear}</div>}
+                {!c.weight && !c.size && !c.location && !c.date && !c.gear && (
+                  <div className="cw-catch-date">{c.loggedAt}</div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => openEditForm(c)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 10, fontFamily: 'var(--font-sans)', padding: '2px 4px', borderRadius: 4 }}
+                  onMouseEnter={e => e.currentTarget.style.color = 'var(--gold)'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-3)'}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deleteCatch(c.id)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 10, fontFamily: 'var(--font-sans)', padding: '2px 4px', borderRadius: 4 }}
+                  onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-3)'}
+                >
+                  Delete
+                </button>
               </div>
             </div>
           ))}
