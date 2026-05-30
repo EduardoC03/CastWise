@@ -1,441 +1,317 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { MapContainer, TileLayer, GeoJSON, useMap, CircleMarker, Popup } from 'react-leaflet'
-import { SITES_RAW } from "../../data/sites";
-import L from 'leaflet'
-import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  X, Filter, ChevronDown, ChevronUp, Waves, Mountain, Anchor, Zap 
-} from 'lucide-react'
-import osmtogeojson from 'osmtogeojson'
-import { topWaterbodies } from '../../data/waterbodyLookup'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { MapContainer, TileLayer, GeoJSON, useMap, CircleMarker, Popup, Tooltip } from 'react-leaflet';
+import L from 'leaflet';
+import { Filter, ChevronDown, ChevronUp, Trophy, Compass, MapPin } from 'lucide-react';
+import { SITES } from '../../data/sites';
 
-// Fix for Leaflet default icons in Vite
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
-import markerIcon from 'leaflet/dist/images/marker-icon.png'
-import markerShadow from 'leaflet/dist/images/marker-shadow.png'
+// Static water-body polygons, generated once by scripts/build-waterbodies.mjs.
+// Keyed by site ID; value is { matchName, matchScore, type, geometry } or null.
+// If the file hasn't been generated yet, the import will fail at build time —
+// that's an explicit error the team should see, not a silent fallback.
+import WATERBODIES from '../../data/waterbodies.json';
 
-delete L.Icon.Default.prototype._getIconUrl
+// Fix Leaflet's default marker icons for Vite
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIcon2x,
   iconUrl: markerIcon,
   shadowUrl: markerShadow,
-})
+});
 
-// --- CONSTANTS ---
-const CENTER = [47.5, -120.5]
-const INITIAL_ZOOM = 7
-const TILE_SIZE = 0.5
+// ----------------------------------------------------------------------------
+// Constants
+// ----------------------------------------------------------------------------
+const CENTER = [47.5, -120.5];
+const INITIAL_ZOOM = 7;
 
-const WDFW_WATERWAY_WHITELIST = [
-  // RIVERS
-  "Columbia River", "Snake River", "Yakima River", "Spokane River", "Wenatchee River", "Methow River", "Okanogan River", "Similkameen River",
-  "Skagit River", "Sauk River", "Cascade River", "Stillaguamish River", "Snohomish River", "Skykomish River", "Snoqualmie River", "Cedar River",
-  "Green River", "White River", "Puyallup River", "Nisqually River", "Deschutes River", "Chehalis River", "Humptulips River", "Hoh River",
-  "Queets River", "Quinault River", "Elwha River", "Dungeness River", "Skokomish River", "Dosewallips River", "Duckabush River",
-  "Cowlitz River", "Lewis River", "Kalama River", "Washougal River", "Wind River", "Klickitat River", "Naches River", "Tieton River",
-  "Cle Elum River", "Teanaway River", "Entiat River", "Chelan River", "Stehekin River", "Twisp River", "Chewuch River",
-  "Sanpoil River", "Kettle River", "Colville River", "Pend Oreille River", "Palouse River", "Tucannon River", "Grande Ronde River", "Asotin Creek",
-  "Walla Walla River", "Touchet River",
-  // LAKES
-  "Lake Washington", "Lake Sammamish", "Lake Chelan", "Lake Stevens", "Lake Tapps", "American Lake", "Silver Lake", "Deep Lake", "Clear Lake",
-  "Lake Quinault", "Lake Crescent", "Lake Ozette", "Lake Cushman", "Spectacle Lake", "Rimrock Lake", "Naches River Reservoir",
-  "Bumping Lake", "Keechelus Lake", "Kachess Lake", "Cle Elum Lake", "Banks Lake", "Rufus Woods Lake", "Lake Roosevelt",
-  "Franklin D Roosevelt Lake", "Omak Lake", "Conconully Reservoir", "Pearrygin Lake", "Blue Lake", "Lenore Lake", "Soap Lake",
-  "Moses Lake", "Potholes Reservoir", "O Sullivan Reservoir", "Riffe Lake", "Reardan Lake", "Medical Lake", "Newman Lake",
-  "Liberty Lake", "Eloika Lake", "Sacheen Lake", "Twin Lakes", "Jameson Lake", "Lenice Lake", "Nunnally Lake", "Merry Lake",
-  "Wenas Lake", "Soda Lake", "Brook Lake", "Amber Lake",
-  // MARINE
-  "Puget Sound", "Hood Canal", "Strait of Juan de Fuca", "Grays Harbor", "Willapa Bay", "Padilla Bay", "Samish Bay",
-  "Bellingham Bay", "Commencement Bay", "Elliott Bay", "Case Inlet", "Henderson Inlet", "Totten Inlet", "Eld Inlet", "Budd Inlet",
-  "Oakland Bay", "Hammersley Inlet", "Pickering Passage", "Dana Passage", "Carr Inlet", "Hale Passage", "Dalco Passage",
-  "East Passage", "Colvos Passage", "Rich Passage", "Port Orchard", "Liberty Bay", "Port Madison", "Port Gamble", "Port Townsend Bay",
-  "Discovery Bay", "Sequim Bay", "Dungeness Bay", "Neah Bay", "La Push", "Westport", "Pacific Ocean Washington Coast"
-];
+// Visual styles for highlighted water bodies (top 3 + explore + trip site).
+// Orange (#ff6b35) is the established highlight color from the previous map.
+const POLYGON_STYLE_LAKE = {
+  color: '#ff6b35', weight: 2.5, fillColor: '#ff6b35',
+  fillOpacity: 0.35, opacity: 0.9,
+};
+const POLYGON_STYLE_RIVER = {
+  color: '#ff6b35', weight: 5, fillOpacity: 0, opacity: 0.85,
+};
 
-// Pre-built lowercase Set for O(1) exact-match lookups
-const WHITELIST_SET = new Set(WDFW_WATERWAY_WHITELIST.map(n => n.toLowerCase()))
-
-const REJECT_TERMS = ['golf','country club','resort','pool','fountain','retention',
-  'detention','storm','irrigation','wastewater','drainage','ditch','sewage','canal']
-
-// Highlight styles — defined once, never recreated
-const SELECTED_STYLE_FILL  = { color: '#ff6b35', weight: 3, fillColor: '#ff6b35', fillOpacity: 0.5, opacity: 1 }
-const SELECTED_STYLE_RIVER = { color: '#ff6b35', weight: 6, fillOpacity: 0, opacity: 1 }
-
-// --- UTILITIES ---
-
-const getTilesInView = (bounds) => {
-  const west = bounds.getWest()
-  const east = bounds.getEast()
-  const south = bounds.getSouth()
-  const north = bounds.getNorth()
-  const tiles = []
-  for (let lat = Math.floor(south / TILE_SIZE) * TILE_SIZE; lat <= north; lat += TILE_SIZE) {
-    for (let lon = Math.floor(west / TILE_SIZE) * TILE_SIZE; lon <= east; lon += TILE_SIZE) {
-      tiles.push(`${lat.toFixed(1)},${lon.toFixed(1)}`)
-    }
-  }
-  return tiles
-}
-
-// --- MAP COMPONENTS ---
-
-const MapClickHandler = ({ onClick }) => {
-  const map = useMap()
-  useEffect(() => {
-    map.on('click', onClick)
-    return () => map.off('click', onClick)
-  }, [map, onClick])
-  return null
-}
-
-const MapController = ({ onMoveEnd, onReady }) => {
-  const map = useMap()
-  const initialized = useRef(false)
-
+// ----------------------------------------------------------------------------
+// MapController — only emits onReady so the parent can hold a map ref.
+// We removed the per-pan onMoveEnd handler that drove the old Overpass fetches.
+// ----------------------------------------------------------------------------
+function MapController({ onReady }) {
+  const map = useMap();
+  const initialized = useRef(false);
   useEffect(() => {
     if (!initialized.current) {
-      onReady(map)
-      initialized.current = true
+      onReady?.(map);
+      initialized.current = true;
     }
-    const handleMoveEnd = () => onMoveEnd(map.getBounds(), map.getZoom())
-    map.on('moveend', handleMoveEnd)
-    map.on('zoomend', handleMoveEnd)
-    return () => {
-      map.off('moveend', handleMoveEnd)
-      map.off('zoomend', handleMoveEnd)
-    }
-  }, [map, onMoveEnd, onReady])
-
-  return null
+  }, [map, onReady]);
+  return null;
 }
 
-export default function MapTab({ onSelect, filteredSites = [] }) {
-  const [geoData, setGeoData] = useState({ type: 'FeatureCollection', features: [] })
-  const [loading, setLoading] = useState(false)
-  const [wdfwWaterNames, setWdfwWaterNames] = useState(new Set())
-  const [selectedFeature, setSelectedFeature] = useState(null)
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const [filters, setFilters] = useState({
-    lakes: true,
-    rivers: true,
-    marine: true,
-    hotspots: true,
-    selectedSpecies: 'all'
-  })
+// ----------------------------------------------------------------------------
+// MapTab
+//
+// Props:
+//   onSelect          — callback when the user clicks any site (opens detail)
+//   highlightedIds    — Set<string> of site IDs to highlight (top 3 + explore + trip)
+//   recommendations   — { top: RankedResult[], explore: RankedResult|null }
+//                       used to label highlighted markers with rank/score
+// ----------------------------------------------------------------------------
+export default function MapTab({
+  onSelect,
+  highlightedIds = new Set(),
+  recommendations = null,
+}) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  // markerMode: 'all' | 'recommended' | 'none'
+  const [markerMode, setMarkerMode] = useState('all');
+  const mapRef = useRef(null);
 
-  const mapRef = useRef(null)
-  const hotspotLayerRef = useRef(null)
-  const debounceTimer = useRef(null)
-  const loadedTilesRef = useRef(new Set())   // ref not state — no re-render on tile add
-  const geoJsonLayerRef = useRef(null)       // ref to GeoJSON layer group for eachLayer
-  const activeLayersRef = useRef([])         // currently highlighted Leaflet layers
-  const selectedWaterbodyRef = useRef(null)  // mirror of state for event-handler closures
-  const [selectedWaterbody, setSelectedWaterbody] = useState(null)
-  selectedWaterbodyRef.current = selectedWaterbody
-  const currentMonth = new Date().getMonth()
-
-  // Fetch WDFW Access Sites
-  useEffect(() => {
-    const fetchWDFW = async () => {
-      try {
-        const cached = sessionStorage.getItem('wdfwWaterNames')
-        const cachedTime = sessionStorage.getItem('wdfwWaterNamesTime')
-        
-        if (cached && cachedTime && Date.now() - parseInt(cachedTime) < 24 * 60 * 60 * 1000) {
-          setWdfwWaterNames(new Set(JSON.parse(cached)))
-          return
-        }
-
-        const res = await fetch('https://data.wa.gov/resource/fgam-kd9h.json?$limit=2000')
-        const data = await res.json()
-        const names = new Set(data.map(site => site.waterbody_name?.toLowerCase().trim()).filter(Boolean))
-        
-        setWdfwWaterNames(names)
-        sessionStorage.setItem('wdfwWaterNames', JSON.stringify(Array.from(names)))
-        sessionStorage.setItem('wdfwWaterNamesTime', Date.now().toString())
-      } catch (e) {
-        console.error("WDFW API Error, using fallback whitelist")
-      }
+  // Look up display labels (rank, score) for highlighted sites
+  const labelForSite = useMemo(() => {
+    const map = new Map();
+    if (recommendations?.top) {
+      recommendations.top.forEach((r, idx) => {
+        map.set(r.site.id, { kind: 'top', rank: idx + 1, score: r.score });
+      });
     }
-    fetchWDFW()
-  }, [])
-
-  const isWDFWWaterway = useCallback((featureName) => {
-    if (!featureName || featureName.trim() === '') return false
-    const name = featureName.toLowerCase().trim()
-    if (REJECT_TERMS.some(t => name.includes(t))) return false
-    // O(1) exact match
-    if (WHITELIST_SET.has(name)) return true
-    // Partial match against whitelist (handles "Columbia River (Bonneville)" etc.)
-    for (const entry of WHITELIST_SET) {
-      if (name.includes(entry) || entry.includes(name)) return true
+    if (recommendations?.explore?.site) {
+      const r = recommendations.explore;
+      map.set(r.site.id, { kind: 'explore', score: r.score });
     }
-    // Dynamic names from WDFW API
-    for (const wdfwName of wdfwWaterNames) {
-      if (name.includes(wdfwName) || wdfwName.includes(name)) return true
+    return map;
+  }, [recommendations]);
+
+  // Visible markers depend on the mode chosen by the user
+  const visibleSites = useMemo(() => {
+    if (markerMode === 'none') return [];
+    if (markerMode === 'recommended') return SITES.filter(s => highlightedIds.has(s.id));
+    return SITES;
+  }, [markerMode, highlightedIds]);
+
+  // The GeoJSON FeatureCollection to render — only highlighted sites' polygons,
+  // filtered to those that have an entry in the static file.
+  const polygonFeatures = useMemo(() => {
+    const features = [];
+    for (const siteId of highlightedIds) {
+      const wb = WATERBODIES[siteId];
+      if (!wb || !wb.geometry) continue;
+      const site = SITES.find(s => s.id === siteId);
+      features.push({
+        type: 'Feature',
+        properties: {
+          siteId,
+          siteName: site?.name || wb.matchName,
+          waterName: wb.matchName,
+          type: wb.type,
+        },
+        geometry: wb.geometry,
+      });
     }
-    return false
-  }, [wdfwWaterNames])
+    return { type: 'FeatureCollection', features };
+  }, [highlightedIds]);
 
-  const onMapReady = useCallback((map) => {
-    mapRef.current = map;
-  }, [])
+  const polygonStyle = useCallback((feature) => {
+    return feature?.properties?.type === 'river' ? POLYGON_STYLE_RIVER : POLYGON_STYLE_LAKE;
+  }, []);
 
-  const fetchWaterbodies = useCallback(async (bounds) => {
-    const tilesInView = getTilesInView(bounds)
-    const newTiles = tilesInView.filter(t => !loadedTilesRef.current.has(t))
-    if (newTiles.length === 0) return
-
-    setLoading(true)
-    newTiles.forEach(t => loadedTilesRef.current.add(t))  // ref write — no re-render
-
-    const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`
-    // out geom qt — returns geometry inline in one pass, no node round-trip
-    const query = `
-      [out:json][timeout:60];
-      (
-        way["natural"="water"]["name"](${bbox});
-        relation["natural"="water"]["name"](${bbox});
-        way["waterway"~"river|stream"]["name"](${bbox});
-        way["place"~"sea|bay|sound|harbor"]["name"](${bbox});
-        relation["place"~"sea|bay|sound|harbor"]["name"](${bbox});
-      );
-      out geom qt;
-    `
-
-    try {
-      const response = await fetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        body: new URLSearchParams({ data: query })
-      })
-      const osmData = await response.json()
-      const geojson = osmtogeojson(osmData)
-
-      const filteredFeatures = geojson.features.filter(f => isWDFWWaterway(f.properties.name || ''))
-      if (filteredFeatures.length === 0) return
-
-      setGeoData(prev => {
-        // Deduplicate by OSM id — prevents same polygon being added on overlapping tiles
-        const existingIds = new Set(prev.features.map(f => f.id))
-        const newFeatures = filteredFeatures.filter(f => !existingIds.has(f.id))
-        if (newFeatures.length === 0) return prev  // no change — skip re-render
-        return { type: 'FeatureCollection', features: [...prev.features, ...newFeatures] }
-      })
-    } catch (err) {
-      console.error('Overpass fetch error:', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [isWDFWWaterway])
-
-  const handleMoveEnd = useCallback((bounds, zoom) => {
-    if (debounceTimer.current) clearTimeout(debounceTimer.current)
-    if (zoom < 8) return setLoading(false)
-    debounceTimer.current = setTimeout(() => fetchWaterbodies(bounds), 600)
-  }, [fetchWaterbodies])
-
-  const handleMapClick = useCallback(() => {
-    activeLayersRef.current.forEach(l => l.setStyle(getFeatureStyle(l.feature)))
-    activeLayersRef.current = []
-    setSelectedWaterbody(null)
-  }, [])
-
-  const getFeatureStyle = (feature) => {
-    const p = feature.properties
-    const isRiver = p.waterway === 'river' || p.waterway === 'stream' || p.waterway === 'canal'
-    const name = (p.name || '').toLowerCase()
-    const isMarine = p.place === 'sea' || p.place === 'bay' || p.place === 'sound' || p.place === 'harbor' || 
-                     name.includes('sound') || name.includes('harbor') || name.includes('bay') || name.includes('strait') || name.includes('ocean');
-
-    if (isMarine) return { color: '#00b4b4', weight: 2, fillColor: '#00b4b4', fillOpacity: 0.18 }
-    if (isRiver) return { color: '#1e78ff', weight: 3, fillOpacity: 0 }
-    return { color: '#1e78ff', weight: 2, fillColor: '#1e78ff', fillOpacity: 0.25 }
-  }
-
-  const filteredGeoData = useMemo(() => {
-    return {
-      type: 'FeatureCollection',
-      features: geoData.features.filter(f => {
-        const p = f.properties
-        const isRiver = p.waterway === 'river' || p.waterway === 'stream' || p.waterway === 'canal'
-        const name = (p.name || '').toLowerCase()
-        const isMarine = p.place === 'sea' || p.place === 'bay' || p.place === 'sound' || p.place === 'harbor' || 
-                         name.includes('sound') || name.includes('harbor') || name.includes('bay') || name.includes('strait') || name.includes('ocean');
-        const isLake = !isRiver && !isMarine
-        if (isLake && !filters.lakes) return false
-        if (isRiver && !filters.rivers) return false
-        if (isMarine && !filters.marine) return false
-        return true
-      })
-    }
-  }, [geoData, filters])
+  const handlePolygonClick = useCallback((feature) => {
+    const siteId = feature?.properties?.siteId;
+    if (!siteId) return;
+    const site = SITES.find(s => s.id === siteId);
+    if (site && onSelect) onSelect(site);
+  }, [onSelect]);
 
   return (
-    <div className="w-full h-full min-h-[500px] relative bg-[var(--bg-color)] overflow-hidden font-sans">
-      <MapContainer 
+    <div className="w-full h-full min-h-[500px] relative bg-[var(--bg-color)] overflow-hidden">
+      <MapContainer
         key="castwise-map"
-        center={CENTER} zoom={INITIAL_ZOOM} 
+        center={CENTER}
+        zoom={INITIAL_ZOOM}
         style={{ height: '100%', width: '100%' }}
-        preferCanvas={true} zoomControl={false}
+        preferCanvas={true}
+        zoomControl={false}
       >
         <TileLayer
           attribution='&copy; CartoDB'
           url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         />
-        
-        <MapController onMoveEnd={handleMoveEnd} onReady={onMapReady} />
-        <MapClickHandler onClick={handleMapClick} />
 
-        {filteredGeoData && filteredGeoData.features?.length > 0 && (
+        <MapController onReady={(m) => { mapRef.current = m; }} />
+
+        {/* WATER-BODY POLYGONS — only highlighted sites' water bodies */}
+        {polygonFeatures.features.length > 0 && (
           <GeoJSON
-            key={`geo-${filteredGeoData.features.length}-${filters.lakes}-${filters.rivers}-${filters.marine}`}
-            ref={geoJsonLayerRef}
-            data={filteredGeoData}
-            style={getFeatureStyle}
-            onEachFeature={(f, l) => {
-              const fname = f.properties.name || null
-              // Re-apply highlight if this feature was selected before the layer remounted
-              if (fname && selectedWaterbodyRef.current === fname) {
-                const p = f.properties
-                const isRiver = p.waterway === 'river' || p.waterway === 'stream'
-                l.setStyle(isRiver ? SELECTED_STYLE_RIVER : SELECTED_STYLE_FILL)
-                if (!activeLayersRef.current.includes(l)) activeLayersRef.current.push(l)
-              }
-              l.on({
-                mouseover: (e) => {
-                  if (selectedWaterbodyRef.current === fname) return  // already highlighted
-                  const style = getFeatureStyle(f)
-                  e.target.setStyle({ fillOpacity: (style.fillOpacity || 0) + 0.15, weight: (style.weight || 2) + 1 })
-                },
-                mouseout: (e) => {
-                  if (selectedWaterbodyRef.current === fname) return  // keep highlight
-                  e.target.setStyle(getFeatureStyle(f))
-                },
-                click: (e) => {
-                  L.DomEvent.stopPropagation(e)
-                  const isTogglingOff = selectedWaterbodyRef.current === fname
-
-                  // Un-highlight previous selection
-                  activeLayersRef.current.forEach(prev => prev.setStyle(getFeatureStyle(prev.feature)))
-                  activeLayersRef.current = []
-
-                  if (!isTogglingOff && fname) {
-                    // Use the GeoJSON layer group ref — map.eachLayer only gives top-level layers,
-                    // individual feature layers live inside the GeoJSON group
-                    if (geoJsonLayerRef.current) {
-                      geoJsonLayerRef.current.eachLayer(layer => {
-                        if ((layer.feature?.properties?.name || null) === fname) {
-                          const p = layer.feature.properties
-                          const isRiver = p.waterway === 'river' || p.waterway === 'stream'
-                          layer.setStyle(isRiver ? SELECTED_STYLE_RIVER : SELECTED_STYLE_FILL)
-                          activeLayersRef.current.push(layer)
-                        }
-                      })
-                    }
-                  }
-
-                  setSelectedWaterbody(isTogglingOff ? null : fname)
-                  if (onSelect) {
-                    const found = SITES_RAW.find(s => s.name.toLowerCase() === (fname || '').toLowerCase())
-                    if (found) onSelect(found)
-                  }
-                  setSelectedFeature(f)
-                }
-              })
+            // Re-key when the highlighted set changes so the layer remounts cleanly
+            key={`polys-${[...highlightedIds].sort().join(',')}`}
+            data={polygonFeatures}
+            style={polygonStyle}
+            onEachFeature={(feature, layer) => {
+              layer.on('click', () => handlePolygonClick(feature));
             }}
           />
         )}
 
-        {/* ACCESS SITES LAYER */}
-        {filteredSites.map(site => (
-          <CircleMarker
-            key={site.id}
-            center={[site.lat, site.lng]}
-            radius={6}
-            pathOptions={{
-              fillColor: 'var(--primary-accent)',
-              color: 'var(--bg-color)',
-              weight: 2,
-              fillOpacity: 1
-            }}
-            eventHandlers={{
-              click: () => onSelect && onSelect(site)
-            }}
-          >
-            <Popup className="custom-popup">
-              <div className="p-1">
-                <div className="font-bold text-slate-900 text-sm mb-1">{site.name}</div>
-                <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">{site.county} Co · {site.manager}</div>
-              </div>
-            </Popup>
-          </CircleMarker>
-        ))}
+        {/* SITE MARKERS — visibility controlled by the filter panel */}
+        {visibleSites.map(site => {
+          const label = labelForSite.get(site.id);
+          const isHighlighted = highlightedIds.has(site.id);
+          const isTop = label?.kind === 'top';
+          const isExplore = label?.kind === 'explore';
+
+          // Visual hierarchy: top picks > explore > all others
+          const radius = isTop ? 9 : isExplore ? 7 : 4;
+          const fillColor = isTop
+            ? 'var(--primary-accent)'
+            : isExplore
+              ? 'var(--secondary-accent)'
+              : 'var(--text-muted)';
+          const fillOpacity = isHighlighted ? 1 : 0.55;
+          const weight = isHighlighted ? 2 : 1;
+
+          return (
+            <CircleMarker
+              key={site.id}
+              center={[site.lat, site.lng]}
+              radius={radius}
+              pathOptions={{
+                fillColor, fillOpacity, weight,
+                color: isHighlighted ? 'var(--bg-color)' : 'transparent',
+              }}
+              eventHandlers={{
+                click: () => onSelect && onSelect(site),
+              }}
+            >
+              {/* Permanent tooltip on top picks: visible label "#1 · 92" */}
+              {isTop && (
+                <Tooltip
+                  permanent
+                  direction="top"
+                  offset={[0, -8]}
+                  className="castwise-rank-tooltip"
+                >
+                  <span style={{ fontWeight: 700 }}>#{label.rank}</span>
+                  <span style={{ opacity: 0.6, marginLeft: 4 }}>· {label.score}</span>
+                </Tooltip>
+              )}
+
+              <Popup>
+                <div style={{ padding: '4px', minWidth: 160 }}>
+                  {label && (
+                    <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#ff6b35', fontWeight: 700, marginBottom: 4 }}>
+                      {label.kind === 'top' ? `Pick #${label.rank} · score ${label.score}` : `Explore pick · ${label.score}`}
+                    </div>
+                  )}
+                  <div style={{ fontWeight: 700, fontSize: 14, color: '#1a1a1a', marginBottom: 2 }}>
+                    {site.name}
+                  </div>
+                  <div style={{ fontSize: 10, color: '#666', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>
+                    {site.county} County · {site.manager}
+                  </div>
+                </div>
+              </Popup>
+            </CircleMarker>
+          );
+        })}
       </MapContainer>
 
-      {/* FILTER PANEL */}
-      <div className="absolute top-4 right-4 z-[1000] w-64">
+      {/* FILTER PANEL — repurposed: toggle marker visibility */}
+      <div className="absolute top-4 right-4 z-[1000] w-60">
         <div className="bg-[var(--surface-color)] shadow-xl border-t-[6px] border-[var(--primary-accent)] rounded-b-xl overflow-hidden">
-          <button 
-            onClick={() => setFiltersOpen(!filtersOpen)} 
-            className="w-full p-4 flex justify-between items-center bg-[var(--surface-color)] text-[var(--text-primary)] uppercase tracking-[0.2em] text-[10px] font-bold"
+          <button
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className="w-full p-3 flex justify-between items-center bg-[var(--surface-color)] text-[var(--text-primary)] uppercase tracking-[0.2em] text-[10px] font-bold hover:bg-[var(--bg-color)] transition-colors"
           >
-            <div className="flex items-center gap-3">
-              <Filter size={14} className="text-[var(--primary-accent)]" />
+            <div className="flex items-center gap-2">
+              <Filter size={12} className="text-[var(--primary-accent)]" />
               <span>Map Layers</span>
             </div>
             {filtersOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
-          
-          <AnimatePresence>
-            {filtersOpen && (
-              <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden bg-[var(--surface-color)] border-t border-[var(--border-color)]">
-                <div className="p-6 space-y-4">
-                  {[
-                    { key: 'lakes', label: 'Lakes & Ponds', Icon: Mountain },
-                    { key: 'rivers', label: 'Rivers & Streams', Icon: Waves },
-                    { key: 'marine', label: 'Marine Areas', Icon: Anchor },
-                  ].map(({ key, label, Icon }) => (
-                    <label key={key} className="flex items-center justify-between cursor-pointer group">
-                      <div className="flex items-center gap-3">
-                        <Icon size={12} className={filters[key] ? 'text-[var(--primary-accent)]' : 'text-[var(--text-muted)]'} />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-primary)]">{label}</span>
-                      </div>
-                      <input 
-                        type="checkbox" 
-                        checked={filters[key]} 
-                        onChange={() => setFilters(f => ({ ...f, [key]: !f[key] }))} 
-                        className="w-5 h-5 accent-[var(--primary-accent)] cursor-pointer" 
-                      />
-                    </label>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+
+          {filtersOpen && (
+            <div className="p-3 border-t border-[var(--border-color)] space-y-1">
+              <div className="text-[9px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1.5">
+                Access sites
+              </div>
+              <MarkerModeOption
+                value="all"
+                current={markerMode}
+                onSelect={setMarkerMode}
+                Icon={MapPin}
+                label="All sites"
+                hint={`${SITES.length} WDFW access points`}
+              />
+              <MarkerModeOption
+                value="recommended"
+                current={markerMode}
+                onSelect={setMarkerMode}
+                Icon={Trophy}
+                label="Recommended only"
+                hint={`${highlightedIds.size} site${highlightedIds.size !== 1 ? 's' : ''} highlighted`}
+              />
+              <MarkerModeOption
+                value="none"
+                current={markerMode}
+                onSelect={setMarkerMode}
+                Icon={Compass}
+                label="Hide markers"
+                hint="Water bodies only"
+              />
+              <div className="text-[9px] font-serif italic text-[var(--text-muted)] pt-2 mt-2 border-t border-[var(--border-color)] leading-snug">
+                Highlighted water bodies show your top recommendations.
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {selectedWaterbody && (
-        <div className="absolute bottom-10 left-4 z-[1000]">
-          <div className="bg-[var(--surface-color)] px-4 py-3 shadow-xl flex items-center gap-3 border-l-[4px] rounded-r-xl" style={{ borderColor: '#ff6b35' }}>
-            <Zap size={12} style={{ color: '#ff6b35' }} />
-            <span className="font-bold text-[10px] tracking-[0.2em] text-[var(--text-primary)] uppercase">{selectedWaterbody}</span>
-            <button onClick={handleMapClick} className="ml-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
-              <X size={12} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {loading && (
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
-          <div className="bg-[var(--surface-color)] px-8 py-4 shadow-xl flex items-center gap-4 border-l-[6px] border-[var(--primary-accent)] rounded-r-xl animate-bounce">
-            <div className="w-2 h-2 bg-[var(--primary-accent)] rounded-full animate-ping" />
-            <p className="font-bold text-[10px] tracking-[0.3em] text-[var(--text-primary)] uppercase">Scanning Waterways...</p>
-          </div>
-        </div>
-      )}
+      {/* Tooltip styling (Leaflet's default is harsh against the dark theme) */}
+      <style>{`
+        .castwise-rank-tooltip {
+          background: var(--primary-accent) !important;
+          color: var(--text-primary) !important;
+          border: none !important;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3) !important;
+          font-size: 11px !important;
+          font-weight: 600 !important;
+          padding: 2px 8px !important;
+          border-radius: 4px !important;
+        }
+        .castwise-rank-tooltip::before {
+          border-top-color: var(--primary-accent) !important;
+        }
+      `}</style>
     </div>
-  )
+  );
+}
+
+function MarkerModeOption({ value, current, onSelect, Icon, label, hint }) {
+  const selected = current === value;
+  return (
+    <button
+      onClick={() => onSelect(value)}
+      className={`w-full text-left p-2 rounded flex items-start gap-2 transition-colors ${
+        selected
+          ? 'bg-[var(--primary-accent)]/15 border border-[var(--primary-accent)]/40'
+          : 'border border-transparent hover:bg-[var(--bg-color)]'
+      }`}
+    >
+      <Icon
+        size={14}
+        className={selected ? 'text-[var(--primary-accent)] mt-0.5' : 'text-[var(--text-muted)] mt-0.5'}
+      />
+      <div className="flex-1 min-w-0">
+        <div className={`text-xs font-semibold ${selected ? 'text-[var(--text-primary)]' : 'text-[var(--text-primary)]'}`}>
+          {label}
+        </div>
+        <div className="text-[9px] text-[var(--text-muted)] leading-tight">{hint}</div>
+      </div>
+    </button>
+  );
 }
