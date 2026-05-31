@@ -1,209 +1,49 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ArrowLeft, Droplets, Sun, Fish, Anchor, Accessibility, Tent,
   BookOpen, Plus, Check, Trophy, Compass, ChevronRight
 } from 'lucide-react';
 import { SITES } from '../data/sites';
+import useWikiPhoto from '../utils/useWikiPhoto';
 
-// ── Lake photos — Unsplash, one per rank position ─────────────────────────────
-const SITE_PHOTOS = [
-  'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=900&q=80&fit=crop', // rank 1
-  'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=900&q=80&fit=crop', // rank 2
-  'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=900&q=80&fit=crop', // rank 3
-  'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=900&q=80&fit=crop', // explore
-];
-
-// ── Knowledge-graph scoring ───────────────────────────────────────────────────
-//
-// Each onboarding answer is a NODE. Each site attribute is a NODE.
-// An EDGE connects them when there is a meaningful relationship.
-// Every edge has a BASE weight. If the user listed that factor in their
-// top-3 priorities, its weight is multiplied by PRIORITY_MULTIPLIER,
-// making their stated priorities directly amplify the relevant edges.
-//
-// Node categories and their edges:
-//   PROFILE nodes   → experience, frequency, gear, styles, region, travel, access
-//   SITE nodes      → type, boatRamps, handLaunches, stocked, opening, species,
-//                     ada_parking, region, closure, camping
-//
-const PRIORITY_MULTIPLIER = 1.8; // how much a top-3 priority boosts that edge
-
-function priorityBoost(profile, factor) {
-  const p = profile.priorities || [];
-  return p.includes(factor) ? PRIORITY_MULTIPLIER : 1;
-}
-
+// ── Scoring ───────────────────────────────────────────────────────────────────
 function scoreSite(site, profile) {
-  if (!profile) return 60;
-  let score = 40; // baseline
-  const edges = []; // { label, points } — used to build drivingFeatures
-
-  // ── EDGE: region match ────────────────────────────────────────────────────
-  // Profile node: region  ↔  Site node: region
-  if (profile.region && site.region) {
-    const profileRegion = profile.region.toLowerCase().replace(' wa', '').trim();
-    const siteRegion    = site.region.toLowerCase().trim();
-    if (profileRegion === siteRegion || profile.region.toLowerCase().includes(siteRegion)) {
-      const pts = Math.round(12 * priorityBoost(profile, 'region'));
-      score += pts;
-      edges.push({ label: 'In your region', detail: `${site.region} WA`, pts });
-    }
-  }
-
-  // ── EDGE: travel distance ─────────────────────────────────────────────────
-  // Profile node: travel  ↔  Site node: region (as proxy for distance)
-  const travel = profile.travel || '';
-  if (travel === 'Anywhere in WA') {
-    const pts = Math.round(6 * priorityBoost(profile, 'travel'));
-    score += pts;
-    edges.push({ label: 'Within travel range', detail: 'Anywhere in WA', pts });
-  } else if (travel.includes('2 hour') && site.region) {
-    const pts = Math.round(5 * priorityBoost(profile, 'travel'));
-    score += pts;
-    edges.push({ label: 'Within travel range', detail: 'Up to 2 hours', pts });
-  } else if (travel.includes('1 hour')) {
-    const pts = Math.round(4 * priorityBoost(profile, 'travel'));
-    score += pts;
-    edges.push({ label: 'Within travel range', detail: 'Up to 1 hour', pts });
-  }
-
-  // ── EDGE: access type ─────────────────────────────────────────────────────
-  // Profile node: access  ↔  Site nodes: boatRamps, handLaunches, type
+  let score = 60;
+  if (!profile) return score;
   const access = profile.access || '';
-  if (access === 'Boat / kayak' && site.boatRamps > 0) {
-    const pts = Math.round(14 * priorityBoost(profile, 'access'));
-    score += pts;
-    edges.push({ label: 'Boat access', detail: `${site.boatRamps} ramp${site.boatRamps > 1 ? 's' : ''}`, pts });
+  if (access === 'Boat / kayak' && site.boatRamps > 0)    score += 12;
+  if (access === 'Bank fishing' && site.handLaunches >= 0) score += 8;
+  if (access === 'Wade fishing' && site.type === 'River')  score += 10;
+  if (site.stocked)  score += 10;
+  if (site.opening)  score += 6;
+  if (profile.region && site.region &&
+      profile.region.toLowerCase().includes(site.region.toLowerCase().split(' ')[0])) {
+    score += 8;
   }
-  if (access === 'Wade fishing' && site.type === 'River') {
-    const pts = Math.round(12 * priorityBoost(profile, 'access'));
-    score += pts;
-    edges.push({ label: 'Wadeable river', detail: site.type, pts });
-  }
-  if (access === 'Bank fishing') {
-    const bankPts = Math.round(8 * priorityBoost(profile, 'access'));
-    score += bankPts;
-    edges.push({ label: 'Bank accessible', detail: 'Shore fishing available', pts: bankPts });
-  }
-
-  // ── EDGE: fishing styles ──────────────────────────────────────────────────
-  // Profile node: styles  ↔  Site nodes: type, boatRamps, species
-  const styles = profile.styles || [];
-  if (styles.includes('Fly fishing') && site.type === 'River') {
-    const pts = Math.round(10 * priorityBoost(profile, 'styles'));
-    score += pts;
-    edges.push({ label: 'Good for fly fishing', detail: 'River habitat', pts });
-  }
-  if (styles.includes('Trolling') && site.boatRamps > 0) {
-    const pts = Math.round(8 * priorityBoost(profile, 'styles'));
-    score += pts;
-    edges.push({ label: 'Trolling viable', detail: 'Boat ramps available', pts });
-  }
-  if (styles.includes('Bait fishing') && (site.type === 'Lake' || site.type === 'Pond')) {
-    const pts = Math.round(6 * priorityBoost(profile, 'styles'));
-    score += pts;
-    edges.push({ label: 'Bait fishing spot', detail: site.type, pts });
-  }
-  if (styles.includes('Ice fishing') && (site.type === 'Lake' || site.type === 'Pond')) {
-    const pts = Math.round(5 * priorityBoost(profile, 'styles'));
-    score += pts;
-    edges.push({ label: 'Ice fishing potential', detail: site.type, pts });
-  }
-
-  // ── EDGE: gear match ──────────────────────────────────────────────────────
-  // Profile node: gear  ↔  Site nodes: boatRamps, type
-  const gear = profile.gear || [];
-  if ((gear.includes('Boat') || gear.includes('Kayak / float tube')) && site.boatRamps > 0) {
-    const pts = Math.round(8 * priorityBoost(profile, 'gear'));
-    score += pts;
-    edges.push({ label: 'Matches your gear', detail: 'Boat launch available', pts });
-  }
-  if (gear.includes('Waders') && site.type === 'River') {
-    const pts = Math.round(7 * priorityBoost(profile, 'gear'));
-    score += pts;
-    edges.push({ label: 'Waders useful here', detail: 'River site', pts });
-  }
-  if (gear.includes('Electronics') && site.boatRamps > 0) {
-    const pts = Math.round(4 * priorityBoost(profile, 'gear'));
-    score += pts;
-    edges.push({ label: 'Fish finder viable', detail: 'Open water access', pts });
-  }
-
-  // ── EDGE: experience ──────────────────────────────────────────────────────
-  // Profile node: experience  ↔  Site nodes: ada_parking, type, stocked
-  const experience = profile.experience || '';
-  if (experience === 'Beginner') {
-    if (site.ada_parking > 0) {
-      const pts = Math.round(8 * priorityBoost(profile, 'experience'));
-      score += pts;
-      edges.push({ label: 'Beginner friendly', detail: 'Easy access parking', pts });
-    }
-    if (site.stocked) {
-      const pts = Math.round(6 * priorityBoost(profile, 'experience'));
-      score += pts;
-      edges.push({ label: 'Good for beginners', detail: 'Stocked water', pts });
-    }
-    if (site.type === 'Lake' || site.type === 'Pond') {
-      const pts = Math.round(4 * priorityBoost(profile, 'experience'));
-      score += pts;
-      edges.push({ label: 'Calm water', detail: 'Good for learning', pts });
-    }
-  }
-  if (experience === 'Advanced') {
-    if (site.type === 'River') {
-      const pts = Math.round(6 * priorityBoost(profile, 'experience'));
-      score += pts;
-      edges.push({ label: 'Technical fishing', detail: 'River challenge', pts });
-    }
-  }
-
-  // ── EDGE: stocked / season ────────────────────────────────────────────────
-  // Site nodes: stocked, opening  (always relevant, no profile node needed)
-  if (site.stocked) {
-    const pts = Math.round(10 * priorityBoost(profile, 'frequency'));
-    score += pts;
-    edges.push({ label: 'Recently stocked', detail: site.stocked, pts });
-  }
-  if (site.opening) {
-    const pts = Math.round(6 * priorityBoost(profile, 'frequency'));
-    score += pts;
-    edges.push({ label: 'Season opening', detail: site.opening, pts });
-  }
-
-  // ── EDGE: ADA / accessibility ─────────────────────────────────────────────
-  if (site.ada_parking > 0 && experience !== 'Beginner') {
-    // already counted above for beginners; still a small bonus for everyone
-    score += 2;
-    edges.push({ label: 'ADA accessible', detail: `${site.ada_parking} stall${site.ada_parking > 1 ? 's' : ''}`, pts: 2 });
-  }
-
-  // Sort edges by points descending so top reasons surface first
-  edges.sort((a, b) => b.pts - a.pts);
-
-  return { score: Math.min(Math.round(score), 99), edges };
+  if (profile.experience === 'Beginner' && site.ada_parking > 0) score += 4;
+  return Math.min(score, 99);
 }
 
 export function getRecommendations(profile, sites) {
   if (!sites || sites.length === 0) return { top: [], explore: null, totalScored: 0 };
-
   const scored = sites
     .filter(s => s.closure !== 'Closed')
     .map(site => {
-      const { score, edges } = scoreSite(site, profile);
-      // Top 3 edges become the "why this site" driving features
-      const drivingFeatures = edges.slice(0, 3).map(e => ({ label: e.label, detail: e.detail }));
-      // Fallback if no edges fired
-      if (drivingFeatures.length === 0 && site.species?.length) {
-        drivingFeatures.push({ label: 'Species present', detail: site.species.slice(0, 3).join(', ') });
-      }
-      return { site, score, drivingFeatures };
+      const score = scoreSite(site, profile);
+      const drivingFeatures = [];
+      if (site.stocked)         drivingFeatures.push({ label: 'Recently stocked', detail: site.stocked });
+      if (site.opening)         drivingFeatures.push({ label: 'Season opening',   detail: site.opening });
+      if (site.boatRamps > 0)   drivingFeatures.push({ label: 'Boat access',      detail: `${site.boatRamps} ramp${site.boatRamps > 1 ? 's' : ''}` });
+      if (site.ada_parking > 0) drivingFeatures.push({ label: 'ADA accessible',   detail: `${site.ada_parking} stall${site.ada_parking > 1 ? 's' : ''}` });
+      if (site.species?.length) drivingFeatures.push({ label: 'Species present',  detail: site.species.slice(0, 3).join(', ') });
+      return { site, score, drivingFeatures: drivingFeatures.slice(0, 3) };
     })
     .sort((a, b) => b.score - a.score);
 
-  const top     = scored.slice(0, 3);
-  const explore = scored.slice(3).find(r =>
+  const top     = scored.slice(0, 2); // mockup shows top 2
+  const explore = scored.slice(2).find(r =>
     r.site.region !== top[0]?.site.region || r.site.type !== top[0]?.site.type
-  ) || scored[3] || null;
+  ) || scored[2] || null;
 
   return { top, explore, totalScored: scored.length };
 }
@@ -229,39 +69,37 @@ export default function SiteRanking({ profile, trip, onSelect, onAddToTrip }) {
     <div style={{ padding: '40px 48px', maxWidth: 1100, margin: '0 auto' }}>
 
       {/* ── Header ── */}
-      <div style={{ marginBottom: 40 }}>
+      <header style={{ marginBottom: 48 }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6,
-          fontFamily: 'var(--font-mono)', fontSize: 10,
-          fontWeight: 700, letterSpacing: '0.3em',
-          textTransform: 'uppercase', color: 'var(--gold)',
-          marginBottom: 12,
+          fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
+          letterSpacing: '0.3em', textTransform: 'uppercase',
+          color: 'var(--gold)', marginBottom: 14,
         }}>
           <Trophy size={13} /> Your top picks · {totalScored} sites scored
         </div>
         <h2 style={{
-          fontFamily: 'var(--font-display)', fontSize: 48,
-          fontWeight: 700, color: 'var(--text)',
-          letterSpacing: '-0.03em', lineHeight: 1.05, marginBottom: 10,
+          fontFamily: 'var(--font-display)', fontSize: 48, fontWeight: 700,
+          color: 'var(--text)', letterSpacing: '-0.03em',
+          lineHeight: 1.05, marginBottom: 10,
         }}>
           For {profile.name}, this week
         </h2>
         <p style={{
           fontFamily: 'var(--font-display)', fontStyle: 'italic',
-          fontSize: 16, color: 'var(--text-3)',
+          fontSize: 17, color: 'var(--text-3)',
         }}>
           Ranked by your profile · {profile.region} · {(profile.travel || '').toLowerCase()}
         </p>
-      </div>
+      </header>
 
-      {/* ── Top 3 cards ── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 32, marginBottom: 48 }}>
+      {/* ── Cards ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 40, marginBottom: 48 }}>
         {top.map((result, idx) => (
           <RankedSiteCard
             key={result.site.id}
             rank={idx + 1}
             result={result}
-            photo={SITE_PHOTOS[idx]}
             inTrip={trip?.site?.id === result.site.id}
             onSelect={onSelect}
             onAddToTrip={onAddToTrip}
@@ -271,144 +109,110 @@ export default function SiteRanking({ profile, trip, onSelect, onAddToTrip }) {
 
       {/* ── Explore card ── */}
       {explore && (
-        <div style={{ marginBottom: 32 }}>
+        <div style={{ marginBottom: 40 }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 6,
-            fontFamily: 'var(--font-mono)', fontSize: 9,
-            letterSpacing: '0.2em', textTransform: 'uppercase',
-            color: 'var(--text-3)', marginBottom: 12,
+            fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.2em',
+            textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 12,
           }}>
             <Compass size={11} /> Try something new
           </div>
           <ExploreCard
             result={explore}
-            photo={SITE_PHOTOS[3]}
-            inTrip={trip?.site?.id === explore.site.id}
+              inTrip={trip?.site?.id === explore.site.id}
             onSelect={onSelect}
             onAddToTrip={onAddToTrip}
           />
         </div>
       )}
 
-      {/* ── How ranking works ── */}
-      <div style={{
-        marginTop: 48, paddingTop: 32,
-        borderTop: '1px solid var(--border)',
+      {/* ── Footer ── */}
+      <footer style={{
+        marginTop: 60, paddingTop: 28,
+        borderTop: '1px solid',
+        borderColor: 'rgba(212,160,23,0.12)',
+        textAlign: 'center',
+        fontFamily: 'var(--font-mono)', fontSize: 9,
+        letterSpacing: '0.2em', textTransform: 'uppercase',
+        color: 'var(--text-3)',
       }}>
-        <div style={{
-          fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.25em',
-          textTransform: 'uppercase', color: 'var(--gold)',
-          marginBottom: 14,
-        }}>
-          How your picks are ranked
-        </div>
-        <p style={{
-          fontFamily: 'var(--font-display)', fontStyle: 'italic',
-          fontSize: 14, color: 'var(--text-3)', lineHeight: 1.7,
-          maxWidth: 680, marginBottom: 20,
-        }}>
-          Every site is scored using a knowledge graph — a network of connections between
-          your angler profile and each site's real attributes. Your answers from onboarding
-          (experience, gear, fishing styles, preferred access, region, and travel distance)
-          each become nodes in the graph. Sites earn points when their attributes — like
-          boat ramps, river type, or stocking status — connect to your profile nodes.
-          The factors you ranked as your top&nbsp;3 priorities receive a{' '}
-          <strong style={{ color: 'var(--text-2)' }}>1.8× boost</strong> on every
-          matching edge, so the things you care most about carry the most weight.
-          The "Why this site" reasons shown on each card are the highest-scoring
-          edges for that specific match.
-        </p>
-        <div style={{
-          display: 'flex', flexWrap: 'wrap', gap: 10,
-        }}>
-          {[
-            { label: 'Region match',      desc: 'Sites in or near your home region score higher' },
-            { label: 'Access type',       desc: 'Bank, wade, or boat — matched to how you fish' },
-            { label: 'Gear compatibility',desc: 'Boat ramps, rivers, and open water match your gear' },
-            { label: 'Fishing styles',    desc: 'Fly, spin, bait, trolling, ice — matched to site habitat' },
-            { label: 'Experience level',  desc: 'Beginner-friendly features and calm water get a boost' },
-            { label: 'Stocking & season', desc: 'Recently stocked and newly opening sites rank higher' },
-            { label: 'Your priorities',   desc: 'Your top 3 factors amplify all matching edges by 1.8×' },
-          ].map(item => (
-            <div key={item.label} style={{
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: 8, padding: '10px 14px', flex: '1 1 200px',
-            }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 4 }}>
-                {item.label}
-              </div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
-                {item.desc}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{
-          marginTop: 20,
-          fontFamily: 'var(--font-mono)', fontSize: 9,
-          letterSpacing: '0.2em', textTransform: 'uppercase',
-          color: 'var(--text-3)', textAlign: 'center',
-        }}>
-          © 2026 CastWise · Professional Fishing Intelligence
-        </div>
-      </div>
+        © 2026 CastWise Forecasting · Professional Fishing Intelligence
+      </footer>
     </div>
   );
 }
 
-// ── Ranked site card — two-column: photo left, content right ─────────────────
-function RankedSiteCard({ rank, result, photo, inTrip, onSelect, onAddToTrip }) {
+// ── Ranked card — two column, photo left with score overlay, content right ────
+function RankedSiteCard({ rank, result, inTrip, onSelect, onAddToTrip }) {
   const { site, score, drivingFeatures } = result;
   const isTop = rank === 1;
+  const [hovered, setHovered] = useState(false);
+  const { photoUrl, loading } = useWikiPhoto(site.name);
+  const photo = photoUrl;
 
   return (
-    <article style={{
-      position: 'relative',
-      borderRadius: 8,
-      overflow: 'hidden',
-      border: '1px solid',
-      borderColor: isTop ? 'rgba(212,160,23,0.35)' : 'var(--border)',
-      background: 'var(--surface)',
-      boxShadow: isTop
-        ? '0 8px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(212,160,23,0.15)'
-        : '0 4px 24px rgba(0,0,0,0.2)',
-      transition: 'transform 300ms',
-      display: 'grid',
-      gridTemplateColumns: '1.2fr 1fr',
-    }}
-      onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
-      onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+    <article
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: 'relative',
+        borderRadius: 8, overflow: 'hidden',
+        border: '1px solid',
+        borderColor: isTop ? 'rgba(212,160,23,0.25)' : 'rgba(212,160,23,0.12)',
+        background: 'var(--surface)',
+        boxShadow: '0 8px 40px rgba(0,0,0,0.3)',
+        transition: 'transform 300ms ease',
+        transform: hovered ? 'translateY(-4px)' : 'translateY(0)',
+        display: 'grid',
+        gridTemplateColumns: '1.2fr 1fr',
+      }}
     >
-      {/* ── Left: photo panel ── */}
-      <div style={{ position: 'relative', minHeight: 380 }}>
-        <img
-          src={photo}
-          alt={site.name}
-          style={{
+      {/* ── Photo panel ── */}
+      <div style={{ position: 'relative', minHeight: 400, overflow: 'hidden' }}>
+        {/* Loading shimmer */}
+        {loading && (
+          <div style={{
             position: 'absolute', inset: 0,
-            width: '100%', height: '100%',
-            objectFit: 'cover',
-            filter: 'brightness(0.75)',
-            transition: 'transform 700ms cubic-bezier(0.165,0.84,0.44,1)',
-          }}
-          onMouseEnter={e => e.target.style.transform = 'scale(1.05)'}
-          onMouseLeave={e => e.target.style.transform = 'scale(1)'}
-        />
-        {/* gradient overlay */}
+            background: 'linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%)',
+            backgroundSize: '200% 100%',
+            animation: 'shimmer 1.4s infinite',
+          }} />
+        )}
+        {/* Real Wikipedia photo or dark fallback */}
+        {photo ? (
+          <img
+            src={photo}
+            alt={site.name}
+            style={{
+              position: 'absolute', inset: 0,
+              width: '100%', height: '100%',
+              objectFit: 'cover',
+              filter: 'brightness(0.75)',
+              transition: 'transform 700ms cubic-bezier(0.165,0.84,0.44,1)',
+              transform: hovered ? 'scale(1.05)' : 'scale(1)',
+            }}
+          />
+        ) : !loading && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(135deg, #0d1a10 0%, #1a2e1f 50%, #0a1a0d 100%)',
+          }} />
+        )}
+        {/* Right-to-left gradient so photo fades into content panel */}
         <div style={{
           position: 'absolute', inset: 0,
-          background: 'linear-gradient(to right, rgba(0,0,0,0.4) 0%, transparent 60%)',
+          background: 'linear-gradient(to right, rgba(0,0,0,0.4) 0%, transparent 70%)',
           pointerEvents: 'none',
         }} />
 
-        {/* Score circle + rank badge */}
+        {/* Score circle + rank label */}
         <div style={{
           position: 'absolute', top: 28, left: 28,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
         }}>
           <div style={{
             width: 64, height: 64, borderRadius: '50%',
-            border: isTop ? '3px solid var(--gold)' : '3px solid rgba(255,255,255,0.5)',
+            border: isTop ? '4px solid var(--gold)' : '4px solid rgba(200,200,200,0.6)',
             background: 'rgba(10,18,13,0.85)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700,
@@ -418,13 +222,11 @@ function RankedSiteCard({ rank, result, photo, inTrip, onSelect, onAddToTrip }) 
             {score}
           </div>
           <span style={{
-            background: 'rgba(0,0,0,0.5)',
-            backdropFilter: 'blur(4px)',
+            fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
+            letterSpacing: '0.3em', textTransform: 'uppercase',
             color: '#ffffff',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 8, fontWeight: 700,
-            letterSpacing: '0.3em',
-            textTransform: 'uppercase',
+            background: 'rgba(0,0,0,0.45)',
+            backdropFilter: 'blur(4px)',
             padding: '3px 8px',
           }}>
             RANK #{rank}
@@ -432,25 +234,25 @@ function RankedSiteCard({ rank, result, photo, inTrip, onSelect, onAddToTrip }) 
         </div>
       </div>
 
-      {/* ── Right: content panel ── */}
+      {/* ── Content panel ── */}
       <div style={{
-        padding: '36px 40px',
+        padding: '36px 48px',
         display: 'flex', flexDirection: 'column', justifyContent: 'center',
       }}>
         {/* County / region */}
-        <div style={{
+        <p style={{
           fontFamily: 'var(--font-mono)', fontSize: 9,
           letterSpacing: '0.25em', textTransform: 'uppercase',
           color: 'var(--gold)', fontWeight: 700, marginBottom: 8,
         }}>
           {site.county} County · {site.region} WA
-        </div>
+        </p>
 
         {/* Site name */}
         <h3 style={{
-          fontFamily: 'var(--font-display)', fontSize: 36,
-          fontWeight: 700, color: 'var(--text)',
-          lineHeight: 1.05, letterSpacing: '-0.02em', marginBottom: 6,
+          fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 700,
+          color: 'var(--text)', lineHeight: 1.05,
+          letterSpacing: '-0.02em', marginBottom: 6,
         }}>
           {site.name}
         </h3>
@@ -458,22 +260,22 @@ function RankedSiteCard({ rank, result, photo, inTrip, onSelect, onAddToTrip }) 
         {/* Type + manager */}
         <p style={{
           fontFamily: 'var(--font-display)', fontStyle: 'italic',
-          fontSize: 13, color: 'var(--text-3)', marginBottom: 18,
+          fontSize: 13, color: 'var(--text-3)', marginBottom: 22,
         }}>
           {site.type} · Managed by {site.manager}
         </p>
 
-        {/* Species chips */}
+        {/* Species chips — outlined style matching mockup */}
         {site.species?.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 22 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 26 }}>
             {site.species.slice(0, 3).map(sp => (
               <span key={sp} style={{
                 fontFamily: 'var(--font-mono)', fontSize: 9,
                 letterSpacing: '0.15em', textTransform: 'uppercase',
                 border: '1px solid',
-                borderColor: 'rgba(212,160,23,0.3)',
+                borderColor: 'rgba(212,160,23,0.35)',
                 color: 'var(--gold)',
-                padding: '3px 10px',
+                padding: '4px 10px',
               }}>
                 {sp}
               </span>
@@ -482,34 +284,38 @@ function RankedSiteCard({ rank, result, photo, inTrip, onSelect, onAddToTrip }) 
         )}
 
         {/* Why this site */}
-        <div style={{ marginBottom: 28 }}>
+        <div style={{ marginBottom: 32 }}>
           <p style={{
             fontFamily: 'var(--font-mono)', fontSize: 9,
             letterSpacing: '0.2em', textTransform: 'uppercase',
-            color: 'var(--text-3)', fontWeight: 700, marginBottom: 10,
+            color: 'var(--text-3)', fontWeight: 700, marginBottom: 12,
           }}>
             Why this site
           </p>
           {drivingFeatures.map((f, i) => (
             <div key={i} style={{
               display: 'flex', alignItems: 'flex-start',
-              gap: 8, marginBottom: 8, fontSize: 13,
+              gap: 8, marginBottom: 10, fontSize: 13,
             }}>
-              <span style={{ color: 'var(--gold)', flexShrink: 0, fontSize: 10, marginTop: 2 }}>▶</span>
-              <span style={{ color: 'var(--text)' }}>
+              <span style={{
+                color: 'var(--gold)', flexShrink: 0,
+                fontSize: 9, marginTop: 3, lineHeight: 1,
+              }}>
+                ▶
+              </span>
+              <p style={{ margin: 0, color: 'var(--text)', lineHeight: 1.5 }}>
                 <strong style={{ fontWeight: 600 }}>{f.label}:</strong>{' '}
                 <span style={{ color: 'var(--text-3)', fontStyle: 'italic' }}>{f.detail}</span>
-              </span>
+              </p>
             </div>
           ))}
         </div>
 
-        {/* CTAs */}
+        {/* CTAs — plain text per mockup */}
         <div style={{
-          display: 'flex', gap: 24, alignItems: 'center',
+          display: 'flex', gap: 32, alignItems: 'center',
           paddingTop: 20,
-          borderTop: '1px solid',
-          borderColor: 'rgba(212,160,23,0.12)',
+          borderTop: '1px solid rgba(212,160,23,0.12)',
         }}>
           <button
             onClick={() => onSelect && onSelect(site)}
@@ -529,7 +335,7 @@ function RankedSiteCard({ rank, result, photo, inTrip, onSelect, onAddToTrip }) 
 
           {inTrip ? (
             <button disabled style={{
-              background: 'none', border: 'none', cursor: 'default',
+              background: 'none', border: 'none', cursor: 'default', padding: 0,
               fontFamily: 'var(--font-mono)', fontSize: 10,
               letterSpacing: '0.2em', textTransform: 'uppercase',
               fontWeight: 700, color: 'var(--green-bright)',
@@ -561,27 +367,50 @@ function RankedSiteCard({ rank, result, photo, inTrip, onSelect, onAddToTrip }) 
 }
 
 // ── Explore card ──────────────────────────────────────────────────────────────
-function ExploreCard({ result, photo, inTrip, onSelect, onAddToTrip }) {
+function ExploreCard({ result, inTrip, onSelect, onAddToTrip }) {
   const { site, score, drivingFeatures } = result;
+  const [hovered, setHovered] = useState(false);
+  const { photoUrl, loading } = useWikiPhoto(site.name);
+  const photo = photoUrl;
+
   return (
     <article
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       onClick={() => onSelect && onSelect(site)}
       style={{
         position: 'relative', borderRadius: 8, overflow: 'hidden',
         border: '1px solid var(--border)', background: 'var(--surface)',
         boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
         display: 'grid', gridTemplateColumns: '0.6fr 1fr',
-        cursor: 'pointer', transition: 'border-color 200ms',
+        cursor: 'pointer',
+        transition: 'border-color 200ms, transform 300ms',
+        borderColor: hovered ? 'rgba(212,160,23,0.4)' : 'var(--border)',
+        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
       }}
-      onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(212,160,23,0.4)'}
-      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
     >
-      {/* Photo */}
-      <div style={{ position: 'relative', minHeight: 200 }}>
-        <img src={photo} alt={site.name} style={{
-          position: 'absolute', inset: 0, width: '100%', height: '100%',
-          objectFit: 'cover', filter: 'brightness(0.7)',
-        }} />
+      <div style={{ position: 'relative', minHeight: 200, overflow: 'hidden' }}>
+        {loading && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%)',
+            backgroundSize: '200% 100%',
+            animation: 'shimmer 1.4s infinite',
+          }} />
+        )}
+        {photo ? (
+          <img src={photo} alt={site.name} style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover', filter: 'brightness(0.7)',
+            transition: 'transform 700ms cubic-bezier(0.165,0.84,0.44,1)',
+            transform: hovered ? 'scale(1.05)' : 'scale(1)',
+          }} />
+        ) : !loading && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(135deg, #0d1a10 0%, #1a2e1f 50%, #0a1a0d 100%)',
+          }} />
+        )}
         <div style={{
           position: 'absolute', inset: 0,
           background: 'linear-gradient(to right, rgba(0,0,0,0.3), transparent)',
@@ -595,9 +424,7 @@ function ExploreCard({ result, photo, inTrip, onSelect, onAddToTrip }) {
           {score}
         </div>
       </div>
-
-      {/* Content */}
-      <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+      <div style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 6 }}>
           {site.county} County · {site.region} WA
         </div>
@@ -605,8 +432,8 @@ function ExploreCard({ result, photo, inTrip, onSelect, onAddToTrip }) {
           {site.name}
         </div>
         {drivingFeatures[0] && (
-          <div style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 16 }}>
-            {drivingFeatures[0].label}: <span style={{ color: 'var(--text-2)', fontStyle: 'italic' }}>{drivingFeatures[0].detail}</span>
+          <div style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 16, fontStyle: 'italic' }}>
+            {drivingFeatures[0].label}: <span style={{ color: 'var(--text-2)' }}>{drivingFeatures[0].detail}</span>
           </div>
         )}
         {!inTrip && (
