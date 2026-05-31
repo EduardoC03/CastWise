@@ -16,7 +16,7 @@ const SLIDES = [
 
 // Background image from src/assets
 import welcomeBg from '../assets/welcome-bg.jpg';
-import fishLogo from '../assets/fish_logo.png';
+import fishLogo from '../assets/fish_logo_transparent.png';
 const WELCOME_PHOTO = welcomeBg;
 
 // ── Mountain silhouette SVG for question slides ───────────────────────────────
