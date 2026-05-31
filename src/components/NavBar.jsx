@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Map, Trophy, BookOpen, Fish, Sun, Moon, LogOut, User, ChevronDown } from 'lucide-react';
+import fishLogo from '../assets/fish_logo.png';
 
 export default function NavBar({ activeSection, onSectionChange, theme, onToggleTheme, profile, onResetProfile }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -30,7 +31,7 @@ export default function NavBar({ activeSection, onSectionChange, theme, onToggle
       {/* Logo */}
       <div className="cw-nav-logo" onClick={() => onSectionChange('map')}>
         <div className="cw-nav-logo-icon">
-          <Fish size={18} />
+          <img src={fishLogo} alt="CastWise logo" style={{ width: 28, height: 28, objectFit: 'contain' }} />
         </div>
         <span className="cw-nav-logo-text">
           Cast<em>Wise</em>
