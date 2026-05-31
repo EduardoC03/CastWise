@@ -1,21 +1,12 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { MapPin, Bell, Search, ChevronRight, Settings, Calendar, Droplets, Sparkles, Sun } from 'lucide-react';
 import MapTab from './tabs/MapTab';
 import { SITES, STOCKING_UPDATES } from '../data/sites';
-import { getRecommendations } from './SiteRanking';
 
-export default function MapView({ profile, trip, onSelect, onViewTrip, onReset }) {
+// ── FIX: MapView now correctly accepts highlightedIds and recommendations from App.jsx
+export default function MapView({ profile, trip, onSelect, onViewTrip, onReset, highlightedIds, recommendations }) {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('map');
-  
-  const recommendations = useMemo(() => getRecommendations(profile, SITES), [profile]);
-  
-  const highlightedIds = useMemo(() => {
-    const ids = new Set();
-    if (recommendations.top) recommendations.top.forEach(r => ids.add(r.site.id));
-    if (recommendations.explore && recommendations.explore.site) ids.add(recommendations.explore.site.id);
-    return ids;
-  }, [recommendations]);
 
   const filtered = useMemo(() => SITES.filter(s => {
     if (profile.travel === 'local' && s.region !== profile.location) return false;
