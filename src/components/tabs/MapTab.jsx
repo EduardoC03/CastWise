@@ -63,25 +63,14 @@ export default function MapTab({
     return map;
   }, [recommendations]);
 
+  // ── FIX: visibleSites relies entirely on highlightedIds from App.jsx
   const visibleSites = useMemo(() => {
     if (markerMode === 'none') return [];
-    if (markerMode === 'recommended' && recommendations) {
-      const list = [];
-      if (recommendations.top) recommendations.top.forEach(r => list.push(r.site));
-      if (recommendations.explore?.site) list.push(recommendations.explore.site);
-      
-      const unique = [];
-      const seen = new Set();
-      for (const site of list) {
-        if (!seen.has(site.id) && site.lat != null && site.lng != null) {
-          seen.add(site.id);
-          unique.push(site);
-        }
-      }
-      return unique;
+    if (markerMode === 'recommended') {
+      return SITES.filter(s => highlightedIds.has(s.id) && s.lat != null && s.lng != null);
     }
-    return SITES.filter(site => site.lat != null && site.lng != null);
-  }, [markerMode, recommendations]);
+    return SITES.filter(s => s.lat != null && s.lng != null);
+  }, [markerMode, highlightedIds]);
 
   const polygonFeatures = useMemo(() => {
     const features = [];
@@ -114,8 +103,6 @@ export default function MapTab({
     if (site && onSelect) onSelect(site);
   }, [onSelect]);
 
-  // ── FIX: Added a safe wrapper class that Leaflet can position, 
-  // keeping our styling safely inside the child div
   const createCustomIcon = useCallback((label) => {
     const isTop = label?.kind === 'top';
     const isExplore = label?.kind === 'explore';
@@ -139,7 +126,7 @@ export default function MapTab({
 
     return L.divIcon({
       html: `<div class="${innerClass}">${htmlContent}</div>`,
-      className: 'castwise-pin-wrapper', // Leaflet manipulates this wrapper
+      className: 'castwise-pin-wrapper',
       iconSize: [size, size],
       iconAnchor: [size / 2, size / 2],
       popupAnchor: [0, -(size / 2)]
@@ -262,8 +249,6 @@ export default function MapTab({
       </div>
 
       <style>{`
-        /* ── FIX: Cleaned up CSS to prevent transform conflicts with Leaflet ── */
-        
         .castwise-pin-wrapper {
           background: transparent !important;
           border: none !important;
