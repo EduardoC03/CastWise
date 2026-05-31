@@ -1,13 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { MapContainer, TileLayer, GeoJSON, useMap, CircleMarker, Popup, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, useMap, Marker, Popup, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import { Filter, ChevronDown, ChevronUp, Trophy, Compass, MapPin } from 'lucide-react';
 import { SITES } from '../../data/sites';
 
-// Static water-body polygons, generated once by scripts/build-waterbodies.mjs.
-// Keyed by site ID; value is { matchName, matchScore, type, geometry } or null.
-// If the file hasn't been generated yet, the import will fail at build time —
-// that's an explicit error the team should see, not a silent fallback.
 import WATERBODIES from '../../data/waterbodies.json';
 
 // Fix Leaflet's default marker icons for Vite
@@ -21,14 +17,9 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-// ----------------------------------------------------------------------------
-// Constants
-// ----------------------------------------------------------------------------
 const CENTER = [47.5, -120.5];
 const INITIAL_ZOOM = 7;
 
-// Visual styles for highlighted water bodies (top 3 + explore + trip site).
-// Orange (#ff6b35) is the established highlight color from the previous map.
 const POLYGON_STYLE_LAKE = {
   color: '#ff6b35', weight: 2.5, fillColor: '#ff6b35',
   fillOpacity: 0.35, opacity: 0.9,
@@ -37,10 +28,6 @@ const POLYGON_STYLE_RIVER = {
   color: '#ff6b35', weight: 5, fillOpacity: 0, opacity: 0.85,
 };
 
-// ----------------------------------------------------------------------------
-// MapController — only emits onReady so the parent can hold a map ref.
-// We removed the per-pan onMoveEnd handler that drove the old Overpass fetches.
-// ----------------------------------------------------------------------------
 function MapController({ onReady }) {
   const map = useMap();
   const initialized = useRef(false);
@@ -53,26 +40,15 @@ function MapController({ onReady }) {
   return null;
 }
 
-// ----------------------------------------------------------------------------
-// MapTab
-//
-// Props:
-//   onSelect          — callback when the user clicks any site (opens detail)
-//   highlightedIds    — Set<string> of site IDs to highlight (top 3 + explore + trip)
-//   recommendations   — { top: RankedResult[], explore: RankedResult|null }
-//                       used to label highlighted markers with rank/score
-// ----------------------------------------------------------------------------
 export default function MapTab({
   onSelect,
   highlightedIds = new Set(),
   recommendations = null,
 }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
-  // markerMode defaults to 'recommended' now instead of 'all'
   const [markerMode, setMarkerMode] = useState('recommended');
   const mapRef = useRef(null);
 
-  // Look up display labels (rank, score) for highlighted sites
   const labelForSite = useMemo(() => {
     const map = new Map();
     if (recommendations?.top) {
@@ -87,15 +63,26 @@ export default function MapTab({
     return map;
   }, [recommendations]);
 
-  // Visible markers depend on the mode chosen by the user
   const visibleSites = useMemo(() => {
     if (markerMode === 'none') return [];
-    if (markerMode === 'recommended') return SITES.filter(s => highlightedIds.has(s.id));
-    return SITES;
-  }, [markerMode, highlightedIds]);
+    if (markerMode === 'recommended' && recommendations) {
+      const list = [];
+      if (recommendations.top) recommendations.top.forEach(r => list.push(r.site));
+      if (recommendations.explore?.site) list.push(recommendations.explore.site);
+      
+      const unique = [];
+      const seen = new Set();
+      for (const site of list) {
+        if (!seen.has(site.id) && site.lat != null && site.lng != null) {
+          seen.add(site.id);
+          unique.push(site);
+        }
+      }
+      return unique;
+    }
+    return SITES.filter(site => site.lat != null && site.lng != null);
+  }, [markerMode, recommendations]);
 
-  // The GeoJSON FeatureCollection to render — only highlighted sites' polygons,
-  // filtered to those that have an entry in the static file.
   const polygonFeatures = useMemo(() => {
     const features = [];
     for (const siteId of highlightedIds) {
@@ -127,6 +114,37 @@ export default function MapTab({
     if (site && onSelect) onSelect(site);
   }, [onSelect]);
 
+  // NEW: Function to generate sleek custom CSS markers
+  const createCustomIcon = (label) => {
+    const isTop = label?.kind === 'top';
+    const isExplore = label?.kind === 'explore';
+
+    let htmlContent = '';
+    let className = 'castwise-pin ';
+    let size = 20;
+
+    if (isTop) {
+      className += 'castwise-pin-top';
+      htmlContent = `<span>${label.rank}</span>`;
+      size = 36;
+    } else if (isExplore) {
+      className += 'castwise-pin-explore';
+      htmlContent = `<span>E</span>`;
+      size = 28;
+    } else {
+      className += 'castwise-pin-default';
+      size = 16;
+    }
+
+    return L.divIcon({
+      html: htmlContent,
+      className: className,
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
+      popupAnchor: [0, -(size / 2)]
+    });
+  };
+
   return (
     <div className="w-full h-full min-h-[500px] relative bg-[var(--bg-color)] overflow-hidden">
       <MapContainer
@@ -144,10 +162,8 @@ export default function MapTab({
 
         <MapController onReady={(m) => { mapRef.current = m; }} />
 
-        {/* WATER-BODY POLYGONS — only highlighted sites' water bodies */}
         {polygonFeatures.features.length > 0 && (
           <GeoJSON
-            // Re-key when the highlighted set changes so the layer remounts cleanly
             key={`polys-${[...highlightedIds].sort().join(',')}`}
             data={polygonFeatures}
             style={polygonStyle}
@@ -157,42 +173,24 @@ export default function MapTab({
           />
         )}
 
-        {/* SITE MARKERS — visibility controlled by the filter panel */}
         {visibleSites.map(site => {
           const label = labelForSite.get(site.id);
-          const isHighlighted = highlightedIds.has(site.id);
           const isTop = label?.kind === 'top';
-          const isExplore = label?.kind === 'explore';
-
-          // Visual hierarchy: top picks > explore > all others
-          const radius = isTop ? 9 : isExplore ? 7 : 4;
-          const fillColor = isTop
-            ? 'var(--primary-accent)'
-            : isExplore
-              ? 'var(--secondary-accent)'
-              : 'var(--text-muted)';
-          const fillOpacity = isHighlighted ? 1 : 0.55;
-          const weight = isHighlighted ? 2 : 1;
 
           return (
-            <CircleMarker
+            <Marker
               key={site.id}
-              center={[site.lat, site.lng]}
-              radius={radius}
-              pathOptions={{
-                fillColor, fillOpacity, weight,
-                color: isHighlighted ? 'var(--bg-color)' : 'transparent',
-              }}
+              position={[site.lat, site.lng]}
+              icon={createCustomIcon(label)}
               eventHandlers={{
                 click: () => onSelect && onSelect(site),
               }}
             >
-              {/* Permanent tooltip on top picks: visible label "#1 · 92" */}
               {isTop && (
                 <Tooltip
                   permanent
                   direction="top"
-                  offset={[0, -8]}
+                  offset={[0, -18]}
                   className="castwise-rank-tooltip"
                 >
                   <span style={{ fontWeight: 700 }}>#{label.rank}</span>
@@ -215,12 +213,11 @@ export default function MapTab({
                   </div>
                 </div>
               </Popup>
-            </CircleMarker>
+            </Marker>
           );
         })}
       </MapContainer>
 
-      {/* FILTER PANEL — repurposed: toggle marker visibility */}
       <div className="absolute top-4 right-4 z-[1000] w-60">
         <div className="bg-[var(--surface-color)] shadow-xl border-t-[6px] border-[var(--primary-accent)] rounded-b-xl overflow-hidden">
           <button
@@ -263,8 +260,41 @@ export default function MapTab({
         </div>
       </div>
 
-      {/* Tooltip styling (Leaflet's default is harsh against the dark theme) */}
       <style>{`
+        /* Custom Map Pin Styles */
+        .castwise-pin {
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: var(--font-display), sans-serif;
+          font-weight: 800;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+          border: 2.5px solid #ffffff;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .castwise-pin:hover {
+          transform: scale(1.15) !important;
+          box-shadow: 0 6px 16px rgba(0,0,0,0.6);
+          z-index: 9999 !important;
+        }
+        .castwise-pin-top {
+          background: linear-gradient(135deg, #f7ce65 0%, #d4a017 100%);
+          color: #1a1a1a;
+          font-size: 16px;
+        }
+        .castwise-pin-explore {
+          background: linear-gradient(135deg, #5aad66 0%, #2f6936 100%);
+          color: #ffffff;
+          font-size: 14px;
+        }
+        .castwise-pin-default {
+          background: #888888;
+          border-width: 1.5px;
+          opacity: 0.7;
+        }
+        
+        /* Tooltip Styles */
         .castwise-rank-tooltip {
           background: var(--primary-accent) !important;
           color: var(--text-primary) !important;
