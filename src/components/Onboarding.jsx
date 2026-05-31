@@ -6,7 +6,7 @@ const SLIDES = [
   { id: 'name',       type: 'input',  heading: 'First, what should we call you?', placeholder: 'Your first name' },
   { id: 'experience', type: 'choice', heading: 'How would you describe your fishing experience?', options: ['Beginner', 'Intermediate', 'Advanced'] },
   { id: 'frequency',  type: 'choice', heading: 'How often do you fish?', options: ['A few times a year', 'Monthly', 'Weekly', 'Almost daily'] },
-  { id: 'gear',       type: 'multi',  heading: 'What gear do you own?', options: ['Spinning rod', 'Fly rod', 'Bait rod', 'Waders', 'Boat', 'Electronics'] },
+  { id: 'gear',       type: 'multi',  heading: 'What gear do you own?', options: ['Spinning rod', 'Fly rod', 'Bait rod', 'Waders', 'Boat', 'Electronics', 'None'] },
   { id: 'styles',     type: 'multi',  heading: 'What fishing styles do you prefer?', options: ['Spin fishing', 'Fly fishing', 'Bait fishing', 'Trolling', 'Ice fishing'] },
   { id: 'region',     type: 'choice', heading: 'Where in Washington are you based?', options: ['Northwest WA', 'Southwest WA', 'Central WA', 'Eastern WA'] },
   { id: 'travel',     type: 'choice', heading: 'How far are you willing to travel to fish?', options: ['Local only (under 30 min)', 'Up to 1 hour', 'Up to 2 hours', 'Anywhere in WA'] },
@@ -48,6 +48,8 @@ export default function Onboarding({ onComplete }) {
     name: '', experience: '', frequency: '', gear: [],
     styles: [], region: '', travel: '', access: '',
   });
+  const [showPriorities, setShowPriorities] = useState(false);
+  const [priorities, setPriorities] = useState([]);
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -56,13 +58,42 @@ export default function Onboarding({ onComplete }) {
     }
   }, [currentStep]);
 
+  const QUESTION_SLIDES = SLIDES.filter(s => s.type !== 'welcome' && s.type !== 'completion');
+  const PRIORITY_OPTIONS = [
+    { v: 'experience', label: 'Experience level',    sub: 'Matching spots to your skill' },
+    { v: 'frequency',  label: 'How often you fish',  sub: 'Based on your fishing schedule' },
+    { v: 'gear',       label: 'Gear you own',        sub: 'Access based on your equipment' },
+    { v: 'styles',     label: 'Fishing styles',      sub: 'Your preferred techniques' },
+    { v: 'region',     label: 'Your region',         sub: 'Spots near where you live' },
+    { v: 'travel',     label: 'Travel distance',     sub: 'How far you\'ll go' },
+    { v: 'access',     label: 'Water access type',   sub: 'Bank, wade, or boat' },
+  ];
+
   const handleNext = () => {
+    const lastQuestionIndex = SLIDES.findIndex(s => s.id === 'access');
+    if (currentStep === lastQuestionIndex) {
+      setShowPriorities(true);
+      return;
+    }
     if (currentStep === SLIDES.length - 1) {
-      onComplete({ ...answers, completedAt: new Date().toISOString() });
+      onComplete({ ...answers, priorities, completedAt: new Date().toISOString() });
       return;
     }
     const advance = () => setCurrentStep(p => p + 1);
     SLIDES[currentStep].type === 'choice' ? setTimeout(advance, 280) : advance();
+  };
+
+  const handlePrioritySelect = (v) => {
+    if (priorities.includes(v)) {
+      setPriorities(priorities.filter(x => x !== v));
+    } else if (priorities.length < 3) {
+      setPriorities([...priorities, v]);
+    }
+  };
+
+  const finishPriorities = () => {
+    setShowPriorities(false);
+    setCurrentStep(SLIDES.findIndex(s => s.id === 'completion'));
   };
 
   const handleBack = () => currentStep > 0 && setCurrentStep(p => p - 1);
@@ -70,8 +101,18 @@ export default function Onboarding({ onComplete }) {
   const handleSelect = (val) => {
     const slide = SLIDES[currentStep];
     if (slide.type === 'multi') {
-      const cur = answers[slide.id] || [];
-      setAnswers({ ...answers, [slide.id]: cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val] });
+      if (slide.id === 'gear') {
+        if (val === 'None') {
+          const cur = answers.gear || [];
+          setAnswers({ ...answers, gear: cur.includes('None') ? [] : ['None'] });
+        } else {
+          const cur = (answers.gear || []).filter(x => x !== 'None');
+          setAnswers({ ...answers, gear: cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val] });
+        }
+      } else {
+        const cur = answers[slide.id] || [];
+        setAnswers({ ...answers, [slide.id]: cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val] });
+      }
     } else {
       setAnswers({ ...answers, [slide.id]: val });
       handleNext();
@@ -451,6 +492,114 @@ export default function Onboarding({ onComplete }) {
               )}
             </>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── PRIORITIES SLIDE ─────────────────────────────────────────────────────
+  if (showPriorities) {
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        background: '#0d1a10',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        overflow: 'hidden',
+      }}>
+        <MountainBg />
+        <div style={{
+          position: 'relative', zIndex: 2,
+          width: '100%', maxWidth: 560,
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', padding: '0 28px',
+        }}>
+          <h2 style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700,
+            color: '#f0ede4', letterSpacing: '-0.02em',
+            textAlign: 'center', marginBottom: 10,
+          }}>
+            What matters most to you?
+          </h2>
+          <p style={{
+            fontFamily: 'var(--font-sans)', fontSize: 14,
+            color: 'rgba(240,237,228,0.55)', marginBottom: 28, textAlign: 'center',
+          }}>
+            Pick your top 3 priorities ({priorities.length} / 3 selected)
+          </p>
+
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {PRIORITY_OPTIONS.map(opt => {
+              const sel      = priorities.includes(opt.v);
+              const disabled = !sel && priorities.length >= 3;
+              return (
+                <button
+                  key={opt.v}
+                  disabled={disabled}
+                  onClick={() => handlePrioritySelect(opt.v)}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '15px 20px', borderRadius: 10,
+                    border: sel ? '1.5px solid #d4a017' : '1.5px solid rgba(255,255,255,0.12)',
+                    background: sel ? '#d4a017' : 'rgba(255,255,255,0.05)',
+                    color: sel ? '#0d1a10' : disabled ? 'rgba(240,237,228,0.3)' : '#f0ede4',
+                    fontFamily: 'var(--font-sans)', fontSize: 14,
+                    fontWeight: sel ? 700 : 500, cursor: disabled ? 'not-allowed' : 'pointer',
+                    textAlign: 'left', transition: 'all 180ms',
+                  }}
+                >
+                  <div>
+                    <div>{opt.label}</div>
+                    <div style={{ fontSize: 11, opacity: 0.65, marginTop: 2 }}>{opt.sub}</div>
+                  </div>
+                  <span style={{
+                    width: 24, height: 24, borderRadius: '50%',
+                    border: sel ? 'none' : '1.5px solid rgba(255,255,255,0.25)',
+                    background: sel ? '#0d1a10' : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0, fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700,
+                    color: '#d4a017',
+                  }}>
+                    {sel ? priorities.indexOf(opt.v) + 1 : ''}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
+            <button
+              onClick={() => setShowPriorities(false)}
+              style={{
+                padding: '12px 28px', borderRadius: 6,
+                border: '1px solid rgba(240,237,228,0.3)', background: 'transparent',
+                color: '#f0ede4', fontFamily: 'var(--font-sans)', fontSize: 13,
+                fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              }}
+            >
+              <ChevronLeft size={15} /> Back
+            </button>
+            <button
+              disabled={priorities.length < 3}
+              onClick={finishPriorities}
+              style={{
+                padding: '12px 36px', borderRadius: 6,
+                border: '1px solid rgba(240,237,228,0.3)', background: 'transparent',
+                color: '#f0ede4', fontFamily: 'var(--font-sans)', fontSize: 13,
+                fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
+                cursor: priorities.length < 3 ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', gap: 8,
+                opacity: priorities.length < 3 ? 0.4 : 1,
+                transition: 'border-color 180ms, opacity 180ms',
+              }}
+              onMouseEnter={e => { if (priorities.length >= 3) e.currentTarget.style.borderColor = '#d4a017'; }}
+              onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(240,237,228,0.3)'}
+            >
+              Finish <ChevronRight size={15} />
+            </button>
+          </div>
         </div>
       </div>
     );
