@@ -16,6 +16,7 @@ const SLIDES = [
 
 // Background image from src/assets
 import welcomeBg from '../assets/welcome-bg.jpg';
+import fishLogo from '../assets/fish_logo_transparent.png';
 const WELCOME_PHOTO = welcomeBg;
 
 // ── Mountain silhouette SVG for question slides ───────────────────────────────
@@ -205,16 +206,27 @@ export default function Onboarding({ onComplete }) {
           padding: '0 16px',
           position: 'relative', zIndex: 10,
         }}>
-          {/* Circle icon */}
+          {/* CastWise fish logo */}
           <div style={{
-            width: 96, height: 96, borderRadius: '50%',
-            border: '2px solid #d4a017',
-            background: 'rgba(0,0,0,0.1)',
-            backdropFilter: 'blur(4px)',
+            width: 120, height: 120,
+            borderRadius: '50%',
+            border: '1.5px solid rgba(212,160,23,0.5)',
+            background: 'rgba(0,0,0,0.15)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            marginBottom: 32,
+            marginBottom: 28,
+            boxShadow: '0 0 40px rgba(212,160,23,0.2)',
           }}>
-            <FishIcon size={48} color="#d4a017" />
+            <img
+              src={fishLogo}
+              alt="CastWise"
+              style={{
+                width: 72, height: 72,
+                objectFit: 'contain',
+                filter: 'drop-shadow(0 2px 8px rgba(212,160,23,0.3))',
+              }}
+            />
           </div>
 
           {/* Wordmark */}
