@@ -13,37 +13,190 @@ const SITE_PHOTOS = [
   'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=900&q=80&fit=crop', // explore
 ];
 
-// ── Scoring ───────────────────────────────────────────────────────────────────
+// ── Knowledge-graph scoring ───────────────────────────────────────────────────
+//
+// Each onboarding answer is a NODE. Each site attribute is a NODE.
+// An EDGE connects them when there is a meaningful relationship.
+// Every edge has a BASE weight. If the user listed that factor in their
+// top-3 priorities, its weight is multiplied by PRIORITY_MULTIPLIER,
+// making their stated priorities directly amplify the relevant edges.
+//
+// Node categories and their edges:
+//   PROFILE nodes   → experience, frequency, gear, styles, region, travel, access
+//   SITE nodes      → type, boatRamps, handLaunches, stocked, opening, species,
+//                     ada_parking, region, closure, camping
+//
+const PRIORITY_MULTIPLIER = 1.8; // how much a top-3 priority boosts that edge
+
+function priorityBoost(profile, factor) {
+  const p = profile.priorities || [];
+  return p.includes(factor) ? PRIORITY_MULTIPLIER : 1;
+}
+
 function scoreSite(site, profile) {
-  let score = 60;
-  if (!profile) return score;
-  const access = profile.access || '';
-  if (access === 'Boat / kayak' && site.boatRamps > 0)    score += 12;
-  if (access === 'Bank fishing' && site.handLaunches >= 0) score += 8;
-  if (access === 'Wade fishing' && site.type === 'River')  score += 10;
-  if (site.stocked)  score += 10;
-  if (site.opening)  score += 6;
-  if (profile.region && site.region &&
-      profile.region.toLowerCase().includes(site.region.toLowerCase().split(' ')[0])) {
-    score += 8;
+  if (!profile) return 60;
+  let score = 40; // baseline
+  const edges = []; // { label, points } — used to build drivingFeatures
+
+  // ── EDGE: region match ────────────────────────────────────────────────────
+  // Profile node: region  ↔  Site node: region
+  if (profile.region && site.region) {
+    const profileRegion = profile.region.toLowerCase().replace(' wa', '').trim();
+    const siteRegion    = site.region.toLowerCase().trim();
+    if (profileRegion === siteRegion || profile.region.toLowerCase().includes(siteRegion)) {
+      const pts = Math.round(12 * priorityBoost(profile, 'region'));
+      score += pts;
+      edges.push({ label: 'In your region', detail: `${site.region} WA`, pts });
+    }
   }
-  if (profile.experience === 'Beginner' && site.ada_parking > 0) score += 4;
-  return Math.min(score, 99);
+
+  // ── EDGE: travel distance ─────────────────────────────────────────────────
+  // Profile node: travel  ↔  Site node: region (as proxy for distance)
+  const travel = profile.travel || '';
+  if (travel === 'Anywhere in WA') {
+    const pts = Math.round(6 * priorityBoost(profile, 'travel'));
+    score += pts;
+    edges.push({ label: 'Within travel range', detail: 'Anywhere in WA', pts });
+  } else if (travel.includes('2 hour') && site.region) {
+    const pts = Math.round(5 * priorityBoost(profile, 'travel'));
+    score += pts;
+    edges.push({ label: 'Within travel range', detail: 'Up to 2 hours', pts });
+  } else if (travel.includes('1 hour')) {
+    const pts = Math.round(4 * priorityBoost(profile, 'travel'));
+    score += pts;
+    edges.push({ label: 'Within travel range', detail: 'Up to 1 hour', pts });
+  }
+
+  // ── EDGE: access type ─────────────────────────────────────────────────────
+  // Profile node: access  ↔  Site nodes: boatRamps, handLaunches, type
+  const access = profile.access || '';
+  if (access === 'Boat / kayak' && site.boatRamps > 0) {
+    const pts = Math.round(14 * priorityBoost(profile, 'access'));
+    score += pts;
+    edges.push({ label: 'Boat access', detail: `${site.boatRamps} ramp${site.boatRamps > 1 ? 's' : ''}`, pts });
+  }
+  if (access === 'Wade fishing' && site.type === 'River') {
+    const pts = Math.round(12 * priorityBoost(profile, 'access'));
+    score += pts;
+    edges.push({ label: 'Wadeable river', detail: site.type, pts });
+  }
+  if (access === 'Bank fishing') {
+    const bankPts = Math.round(8 * priorityBoost(profile, 'access'));
+    score += bankPts;
+    edges.push({ label: 'Bank accessible', detail: 'Shore fishing available', pts: bankPts });
+  }
+
+  // ── EDGE: fishing styles ──────────────────────────────────────────────────
+  // Profile node: styles  ↔  Site nodes: type, boatRamps, species
+  const styles = profile.styles || [];
+  if (styles.includes('Fly fishing') && site.type === 'River') {
+    const pts = Math.round(10 * priorityBoost(profile, 'styles'));
+    score += pts;
+    edges.push({ label: 'Good for fly fishing', detail: 'River habitat', pts });
+  }
+  if (styles.includes('Trolling') && site.boatRamps > 0) {
+    const pts = Math.round(8 * priorityBoost(profile, 'styles'));
+    score += pts;
+    edges.push({ label: 'Trolling viable', detail: 'Boat ramps available', pts });
+  }
+  if (styles.includes('Bait fishing') && (site.type === 'Lake' || site.type === 'Pond')) {
+    const pts = Math.round(6 * priorityBoost(profile, 'styles'));
+    score += pts;
+    edges.push({ label: 'Bait fishing spot', detail: site.type, pts });
+  }
+  if (styles.includes('Ice fishing') && (site.type === 'Lake' || site.type === 'Pond')) {
+    const pts = Math.round(5 * priorityBoost(profile, 'styles'));
+    score += pts;
+    edges.push({ label: 'Ice fishing potential', detail: site.type, pts });
+  }
+
+  // ── EDGE: gear match ──────────────────────────────────────────────────────
+  // Profile node: gear  ↔  Site nodes: boatRamps, type
+  const gear = profile.gear || [];
+  if ((gear.includes('Boat') || gear.includes('Kayak / float tube')) && site.boatRamps > 0) {
+    const pts = Math.round(8 * priorityBoost(profile, 'gear'));
+    score += pts;
+    edges.push({ label: 'Matches your gear', detail: 'Boat launch available', pts });
+  }
+  if (gear.includes('Waders') && site.type === 'River') {
+    const pts = Math.round(7 * priorityBoost(profile, 'gear'));
+    score += pts;
+    edges.push({ label: 'Waders useful here', detail: 'River site', pts });
+  }
+  if (gear.includes('Electronics') && site.boatRamps > 0) {
+    const pts = Math.round(4 * priorityBoost(profile, 'gear'));
+    score += pts;
+    edges.push({ label: 'Fish finder viable', detail: 'Open water access', pts });
+  }
+
+  // ── EDGE: experience ──────────────────────────────────────────────────────
+  // Profile node: experience  ↔  Site nodes: ada_parking, type, stocked
+  const experience = profile.experience || '';
+  if (experience === 'Beginner') {
+    if (site.ada_parking > 0) {
+      const pts = Math.round(8 * priorityBoost(profile, 'experience'));
+      score += pts;
+      edges.push({ label: 'Beginner friendly', detail: 'Easy access parking', pts });
+    }
+    if (site.stocked) {
+      const pts = Math.round(6 * priorityBoost(profile, 'experience'));
+      score += pts;
+      edges.push({ label: 'Good for beginners', detail: 'Stocked water', pts });
+    }
+    if (site.type === 'Lake' || site.type === 'Pond') {
+      const pts = Math.round(4 * priorityBoost(profile, 'experience'));
+      score += pts;
+      edges.push({ label: 'Calm water', detail: 'Good for learning', pts });
+    }
+  }
+  if (experience === 'Advanced') {
+    if (site.type === 'River') {
+      const pts = Math.round(6 * priorityBoost(profile, 'experience'));
+      score += pts;
+      edges.push({ label: 'Technical fishing', detail: 'River challenge', pts });
+    }
+  }
+
+  // ── EDGE: stocked / season ────────────────────────────────────────────────
+  // Site nodes: stocked, opening  (always relevant, no profile node needed)
+  if (site.stocked) {
+    const pts = Math.round(10 * priorityBoost(profile, 'frequency'));
+    score += pts;
+    edges.push({ label: 'Recently stocked', detail: site.stocked, pts });
+  }
+  if (site.opening) {
+    const pts = Math.round(6 * priorityBoost(profile, 'frequency'));
+    score += pts;
+    edges.push({ label: 'Season opening', detail: site.opening, pts });
+  }
+
+  // ── EDGE: ADA / accessibility ─────────────────────────────────────────────
+  if (site.ada_parking > 0 && experience !== 'Beginner') {
+    // already counted above for beginners; still a small bonus for everyone
+    score += 2;
+    edges.push({ label: 'ADA accessible', detail: `${site.ada_parking} stall${site.ada_parking > 1 ? 's' : ''}`, pts: 2 });
+  }
+
+  // Sort edges by points descending so top reasons surface first
+  edges.sort((a, b) => b.pts - a.pts);
+
+  return { score: Math.min(Math.round(score), 99), edges };
 }
 
 export function getRecommendations(profile, sites) {
   if (!sites || sites.length === 0) return { top: [], explore: null, totalScored: 0 };
+
   const scored = sites
     .filter(s => s.closure !== 'Closed')
     .map(site => {
-      const score = scoreSite(site, profile);
-      const drivingFeatures = [];
-      if (site.stocked)         drivingFeatures.push({ label: 'Recently stocked', detail: site.stocked });
-      if (site.opening)         drivingFeatures.push({ label: 'Season opening',   detail: site.opening });
-      if (site.boatRamps > 0)   drivingFeatures.push({ label: 'Boat access',      detail: `${site.boatRamps} ramp${site.boatRamps > 1 ? 's' : ''}` });
-      if (site.ada_parking > 0) drivingFeatures.push({ label: 'ADA accessible',   detail: `${site.ada_parking} stall${site.ada_parking > 1 ? 's' : ''}` });
-      if (site.species?.length) drivingFeatures.push({ label: 'Species present',  detail: site.species.slice(0, 3).join(', ') });
-      return { site, score, drivingFeatures: drivingFeatures.slice(0, 3) };
+      const { score, edges } = scoreSite(site, profile);
+      // Top 3 edges become the "why this site" driving features
+      const drivingFeatures = edges.slice(0, 3).map(e => ({ label: e.label, detail: e.detail }));
+      // Fallback if no edges fired
+      if (drivingFeatures.length === 0 && site.species?.length) {
+        drivingFeatures.push({ label: 'Species present', detail: site.species.slice(0, 3).join(', ') });
+      }
+      return { site, score, drivingFeatures };
     })
     .sort((a, b) => b.score - a.score);
 
@@ -137,16 +290,67 @@ export default function SiteRanking({ profile, trip, onSelect, onAddToTrip }) {
         </div>
       )}
 
-      {/* ── Footer ── */}
+      {/* ── How ranking works ── */}
       <div style={{
-        marginTop: 40, paddingTop: 24,
+        marginTop: 48, paddingTop: 32,
         borderTop: '1px solid var(--border)',
-        textAlign: 'center',
-        fontFamily: 'var(--font-mono)', fontSize: 9,
-        letterSpacing: '0.2em', textTransform: 'uppercase',
-        color: 'var(--text-3)',
       }}>
-        © 2026 CastWise · Professional Fishing Intelligence
+        <div style={{
+          fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.25em',
+          textTransform: 'uppercase', color: 'var(--gold)',
+          marginBottom: 14,
+        }}>
+          How your picks are ranked
+        </div>
+        <p style={{
+          fontFamily: 'var(--font-display)', fontStyle: 'italic',
+          fontSize: 14, color: 'var(--text-3)', lineHeight: 1.7,
+          maxWidth: 680, marginBottom: 20,
+        }}>
+          Every site is scored using a knowledge graph — a network of connections between
+          your angler profile and each site's real attributes. Your answers from onboarding
+          (experience, gear, fishing styles, preferred access, region, and travel distance)
+          each become nodes in the graph. Sites earn points when their attributes — like
+          boat ramps, river type, or stocking status — connect to your profile nodes.
+          The factors you ranked as your top&nbsp;3 priorities receive a{' '}
+          <strong style={{ color: 'var(--text-2)' }}>1.8× boost</strong> on every
+          matching edge, so the things you care most about carry the most weight.
+          The "Why this site" reasons shown on each card are the highest-scoring
+          edges for that specific match.
+        </p>
+        <div style={{
+          display: 'flex', flexWrap: 'wrap', gap: 10,
+        }}>
+          {[
+            { label: 'Region match',      desc: 'Sites in or near your home region score higher' },
+            { label: 'Access type',       desc: 'Bank, wade, or boat — matched to how you fish' },
+            { label: 'Gear compatibility',desc: 'Boat ramps, rivers, and open water match your gear' },
+            { label: 'Fishing styles',    desc: 'Fly, spin, bait, trolling, ice — matched to site habitat' },
+            { label: 'Experience level',  desc: 'Beginner-friendly features and calm water get a boost' },
+            { label: 'Stocking & season', desc: 'Recently stocked and newly opening sites rank higher' },
+            { label: 'Your priorities',   desc: 'Your top 3 factors amplify all matching edges by 1.8×' },
+          ].map(item => (
+            <div key={item.label} style={{
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 8, padding: '10px 14px', flex: '1 1 200px',
+            }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 4 }}>
+                {item.label}
+              </div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
+                {item.desc}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{
+          marginTop: 20,
+          fontFamily: 'var(--font-mono)', fontSize: 9,
+          letterSpacing: '0.2em', textTransform: 'uppercase',
+          color: 'var(--text-3)', textAlign: 'center',
+        }}>
+          © 2026 CastWise · Professional Fishing Intelligence
+        </div>
       </div>
     </div>
   );
