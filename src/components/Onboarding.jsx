@@ -6,7 +6,7 @@ const SLIDES = [
   { id: 'name',       type: 'input',  heading: 'First, what should we call you?', placeholder: 'Your first name' },
   { id: 'experience', type: 'choice', heading: 'How would you describe your fishing experience?', options: ['Beginner', 'Intermediate', 'Advanced'] },
   { id: 'frequency',  type: 'choice', heading: 'How often do you fish?', options: ['A few times a year', 'Monthly', 'Weekly', 'Almost daily'] },
-  { id: 'gear',       type: 'multi',  heading: 'What gear do you own?', options: ['Spinning rod', 'Fly rod', 'Bait rod', 'Waders', 'Boat', 'Electronics', 'None'] },
+  { id: 'gear',       type: 'multi',  heading: 'What gear do you own?', options: ['Spinning rod', 'Fly rod', 'Bait rod', 'Waders', 'Boat', 'Electronics'] },
   { id: 'styles',     type: 'multi',  heading: 'What fishing styles do you prefer?', options: ['Spin fishing', 'Fly fishing', 'Bait fishing', 'Trolling', 'Ice fishing'] },
   { id: 'region',     type: 'choice', heading: 'Where in Washington are you based?', options: ['Northwest WA', 'Southwest WA', 'Central WA', 'Eastern WA'] },
   { id: 'travel',     type: 'choice', heading: 'How far are you willing to travel to fish?', options: ['Local only (under 30 min)', 'Up to 1 hour', 'Up to 2 hours', 'Anywhere in WA'] },
@@ -16,7 +16,6 @@ const SLIDES = [
 
 // Background image from src/assets
 import welcomeBg from '../assets/welcome-bg.jpg';
-import fishLogo from '../assets/fish_logo_transparent.png';
 const WELCOME_PHOTO = welcomeBg;
 
 // ── Mountain silhouette SVG for question slides ───────────────────────────────
@@ -49,8 +48,6 @@ export default function Onboarding({ onComplete }) {
     name: '', experience: '', frequency: '', gear: [],
     styles: [], region: '', travel: '', access: '',
   });
-  const [showPriorities, setShowPriorities] = useState(false);
-  const [priorities, setPriorities] = useState([]);
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -59,42 +56,13 @@ export default function Onboarding({ onComplete }) {
     }
   }, [currentStep]);
 
-  const QUESTION_SLIDES = SLIDES.filter(s => s.type !== 'welcome' && s.type !== 'completion');
-  const PRIORITY_OPTIONS = [
-    { v: 'experience', label: 'Experience level',    sub: 'Matching spots to your skill' },
-    { v: 'frequency',  label: 'How often you fish',  sub: 'Based on your fishing schedule' },
-    { v: 'gear',       label: 'Gear you own',        sub: 'Access based on your equipment' },
-    { v: 'styles',     label: 'Fishing styles',      sub: 'Your preferred techniques' },
-    { v: 'region',     label: 'Your region',         sub: 'Spots near where you live' },
-    { v: 'travel',     label: 'Travel distance',     sub: 'How far you\'ll go' },
-    { v: 'access',     label: 'Water access type',   sub: 'Bank, wade, or boat' },
-  ];
-
   const handleNext = () => {
-    const lastQuestionIndex = SLIDES.findIndex(s => s.id === 'access');
-    if (currentStep === lastQuestionIndex) {
-      setTimeout(() => setShowPriorities(true), 280);
-      return;
-    }
     if (currentStep === SLIDES.length - 1) {
-      onComplete({ ...answers, priorities, completedAt: new Date().toISOString() });
+      onComplete({ ...answers, completedAt: new Date().toISOString() });
       return;
     }
     const advance = () => setCurrentStep(p => p + 1);
     SLIDES[currentStep].type === 'choice' ? setTimeout(advance, 280) : advance();
-  };
-
-  const handlePrioritySelect = (v) => {
-    if (priorities.includes(v)) {
-      setPriorities(priorities.filter(x => x !== v));
-    } else if (priorities.length < 3) {
-      setPriorities([...priorities, v]);
-    }
-  };
-
-  const finishPriorities = () => {
-    setShowPriorities(false);
-    setCurrentStep(SLIDES.findIndex(s => s.id === 'completion'));
   };
 
   const handleBack = () => currentStep > 0 && setCurrentStep(p => p - 1);
@@ -102,18 +70,8 @@ export default function Onboarding({ onComplete }) {
   const handleSelect = (val) => {
     const slide = SLIDES[currentStep];
     if (slide.type === 'multi') {
-      if (slide.id === 'gear') {
-        if (val === 'None') {
-          const cur = answers.gear || [];
-          setAnswers({ ...answers, gear: cur.includes('None') ? [] : ['None'] });
-        } else {
-          const cur = (answers.gear || []).filter(x => x !== 'None');
-          setAnswers({ ...answers, gear: cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val] });
-        }
-      } else {
-        const cur = answers[slide.id] || [];
-        setAnswers({ ...answers, [slide.id]: cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val] });
-      }
+      const cur = answers[slide.id] || [];
+      setAnswers({ ...answers, [slide.id]: cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val] });
     } else {
       setAnswers({ ...answers, [slide.id]: val });
       handleNext();
@@ -138,114 +96,6 @@ export default function Onboarding({ onComplete }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [currentStep, answers]);
 
-  // ── PRIORITIES SLIDE ─────────────────────────────────────────────────────
-  if (showPriorities) {
-    return (
-      <div style={{
-        position: 'fixed', inset: 0, zIndex: 50,
-        background: '#0d1a10',
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        overflow: 'hidden',
-      }}>
-        <MountainBg />
-        <div style={{
-          position: 'relative', zIndex: 2,
-          width: '100%', maxWidth: 560,
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', padding: '0 28px',
-        }}>
-          <h2 style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700,
-            color: '#f0ede4', letterSpacing: '-0.02em',
-            textAlign: 'center', marginBottom: 10,
-          }}>
-            What matters most to you?
-          </h2>
-          <p style={{
-            fontFamily: 'var(--font-sans)', fontSize: 14,
-            color: 'rgba(240,237,228,0.55)', marginBottom: 28, textAlign: 'center',
-          }}>
-            Pick your top 3 priorities ({priorities.length} / 3 selected)
-          </p>
-
-          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {PRIORITY_OPTIONS.map(opt => {
-              const sel      = priorities.includes(opt.v);
-              const disabled = !sel && priorities.length >= 3;
-              return (
-                <button
-                  key={opt.v}
-                  disabled={disabled}
-                  onClick={() => handlePrioritySelect(opt.v)}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '15px 20px', borderRadius: 10,
-                    border: sel ? '1.5px solid #d4a017' : '1.5px solid rgba(255,255,255,0.12)',
-                    background: sel ? '#d4a017' : 'rgba(255,255,255,0.05)',
-                    color: sel ? '#0d1a10' : disabled ? 'rgba(240,237,228,0.3)' : '#f0ede4',
-                    fontFamily: 'var(--font-sans)', fontSize: 14,
-                    fontWeight: sel ? 700 : 500, cursor: disabled ? 'not-allowed' : 'pointer',
-                    textAlign: 'left', transition: 'all 180ms',
-                  }}
-                >
-                  <div>
-                    <div>{opt.label}</div>
-                    <div style={{ fontSize: 11, opacity: 0.65, marginTop: 2 }}>{opt.sub}</div>
-                  </div>
-                  <span style={{
-                    width: 24, height: 24, borderRadius: '50%',
-                    border: sel ? 'none' : '1.5px solid rgba(255,255,255,0.25)',
-                    background: sel ? '#0d1a10' : 'transparent',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0, fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700,
-                    color: '#d4a017',
-                  }}>
-                    {sel ? priorities.indexOf(opt.v) + 1 : ''}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
-            <button
-              onClick={() => setShowPriorities(false)}
-              style={{
-                padding: '12px 28px', borderRadius: 6,
-                border: '1px solid rgba(240,237,228,0.3)', background: 'transparent',
-                color: '#f0ede4', fontFamily: 'var(--font-sans)', fontSize: 13,
-                fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-              }}
-            >
-              <ChevronLeft size={15} /> Back
-            </button>
-            <button
-              disabled={priorities.length < 3}
-              onClick={finishPriorities}
-              style={{
-                padding: '12px 36px', borderRadius: 6,
-                border: '1px solid rgba(240,237,228,0.3)', background: 'transparent',
-                color: '#f0ede4', fontFamily: 'var(--font-sans)', fontSize: 13,
-                fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
-                cursor: priorities.length < 3 ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', gap: 8,
-                opacity: priorities.length < 3 ? 0.4 : 1,
-                transition: 'border-color 180ms, opacity 180ms',
-              }}
-              onMouseEnter={e => { if (priorities.length >= 3) e.currentTarget.style.borderColor = '#d4a017'; }}
-              onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(240,237,228,0.3)'}
-            >
-              Finish <ChevronRight size={15} />
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // ── WELCOME SLIDE ─────────────────────────────────────────────────────────
   if (isWelcome) {
     return (
@@ -253,17 +103,50 @@ export default function Onboarding({ onComplete }) {
         position: 'fixed', inset: 0, zIndex: 50,
         display: 'flex', flexDirection: 'column',
         overflow: 'hidden',
-        backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.25) 35%, rgba(0,0,0,0.5) 65%, rgba(0,0,0,0.55) 100%), url(${WELCOME_PHOTO})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
+        background: '#0a1a0e', // fallback while image loads
       }}>
 
-        {/* Dark vignette at bottom for footer text legibility */}
+        {/* 
+          Background image as <img> rather than CSS background-image.
+          Browsers apply better bicubic/lanczos interpolation to <img> elements,
+          which gives noticeably sharper results when upscaling a 1344x768 source
+          to a 2560x1440+ display.
+        */}
+        <img
+          src={WELCOME_PHOTO}
+          alt=""
+          aria-hidden="true"
+          style={{
+            position: 'absolute', inset: 0,
+            width: '100%', height: '100%',
+            objectFit: 'cover',
+            objectPosition: 'center center',
+            // Force highest-quality upscaling interpolation
+            imageRendering: 'high-quality',
+            // Slight unsharp-mask effect counteracts blur from upscaling
+            filter: 'contrast(1.06) saturate(1.08)',
+            // Hardware-accelerated compositing layer
+            willChange: 'transform',
+            transform: 'translateZ(0)',
+          }}
+        />
+
+        {/* Dark overlay — slightly stronger to disguise upscaling on large screens */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(rgba(0,0,0,0.22), rgba(0,0,0,0.28))',
+          // Tiny backdrop blur softens any pixelation at the cost of sharpness —
+          // adjust blur amount: 0px = sharpest, 1.5px = smoothest, 2px = too soft
+          backdropFilter: 'blur(0.8px)',
+          WebkitBackdropFilter: 'blur(0.8px)',
+          pointerEvents: 'none',
+        }} />
+
+        {/* Mist overlay on water */}
         <div style={{
           position: 'absolute', bottom: 0, left: 0, right: 0,
-          height: '25%',
-          background: 'linear-gradient(to top, rgba(0,0,0,0.45), transparent)',
+          height: '30%',
+          background: 'linear-gradient(to top, rgba(255,255,255,0.15), transparent)',
           pointerEvents: 'none',
         }} />
 
@@ -273,17 +156,15 @@ export default function Onboarding({ onComplete }) {
           display: 'flex', alignItems: 'center',
           justifyContent: 'space-between',
           padding: '24px 32px',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          background: 'rgba(0,0,0,0.18)',
         }}>
           {/* Logo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{
-              width: 32, height: 32,
+              width: 32, height: 32, borderRadius: '50%',
+              border: '1px solid #d4a017',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <img src={fishLogo} alt="CastWise" style={{ width: 32, height: 32, objectFit: 'contain' }} />
+              <span style={{ color: '#d4a017', fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 500 }}>CW</span>
             </div>
             <span style={{
               fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700,
@@ -324,18 +205,17 @@ export default function Onboarding({ onComplete }) {
           padding: '0 16px',
           position: 'relative', zIndex: 10,
         }}>
-          {/* Fish logo */}
-          <img
-            src={fishLogo}
-            alt="CastWise fish"
-            style={{
-              width: 220, height: 220,
-              objectFit: 'contain',
-              marginBottom: 28,
-              opacity: 0.95,
-              filter: 'drop-shadow(0 6px 28px rgba(212,160,23,0.55)) drop-shadow(0 2px 8px rgba(0,0,0,0.4))',
-            }}
-          />
+          {/* Circle icon */}
+          <div style={{
+            width: 96, height: 96, borderRadius: '50%',
+            border: '2px solid #d4a017',
+            background: 'rgba(0,0,0,0.1)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            marginBottom: 32,
+          }}>
+            <FishIcon size={48} color="#d4a017" />
+          </div>
 
           {/* Wordmark */}
           <h1 style={{
@@ -346,7 +226,7 @@ export default function Onboarding({ onComplete }) {
             letterSpacing: '-0.03em',
             lineHeight: 1,
             marginBottom: 8,
-            textShadow: '0 2px 16px rgba(0,0,0,0.7), 0 1px 4px rgba(0,0,0,0.5)',
+            filter: 'drop-shadow(0 1px 2px rgba(255,255,255,0.3))',
           }}>
             Cast<em style={{ fontStyle: 'italic', color: '#d4a017' }}>Wise</em>
           </h1>
@@ -355,11 +235,10 @@ export default function Onboarding({ onComplete }) {
           <p style={{
             fontSize: 'clamp(16px, 2.5vw, 22px)',
             fontWeight: 500,
-            color: 'rgba(255,255,255,0.9)',
+            color: '#1e293b',
             marginBottom: 40,
             letterSpacing: '-0.01em',
             fontFamily: 'var(--font-sans)',
-            textShadow: '0 1px 8px rgba(0,0,0,0.7)',
           }}>
             Fish smarter, not harder.
           </p>
@@ -400,13 +279,13 @@ export default function Onboarding({ onComplete }) {
           <div style={{ display: 'flex', gap: 24 }}>
             {['Map', 'Picks', 'Species', 'Trip Briefing'].map(l => (
               <a key={l} href="#" style={{
-                color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: 600,
+                color: '#374151', fontSize: 10, fontWeight: 600,
                 fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
                 letterSpacing: '0.12em', textDecoration: 'none',
                 transition: 'color 160ms',
               }}
-                onMouseEnter={e => e.target.style.color = '#d4a017'}
-                onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.6)'}
+                onMouseEnter={e => e.target.style.color = '#000'}
+                onMouseLeave={e => e.target.style.color = '#374151'}
               >
                 {l}
               </a>
@@ -415,22 +294,22 @@ export default function Onboarding({ onComplete }) {
           {/* Social + copyright */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             {/* Facebook */}
-            <a href="#" style={{ color: 'rgba(255,255,255,0.5)' }} onMouseEnter={e => e.currentTarget.style.color = '#d4a017'} onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}>
+            <a href="#" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#000'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
               <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M18.77,7.46H14.5v-1.9c0-.9.6-1.1,1-1.1h3V.5h-4.33C10.24.5,9.5,3.44,9.5,5.32v2.14h-3v4h3v12h5v-12h3.85Z"/></svg>
             </a>
             {/* X / Twitter */}
-            <a href="#" style={{ color: 'rgba(255,255,255,0.5)' }} onMouseEnter={e => e.currentTarget.style.color = '#d4a017'} onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}>
+            <a href="#" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#000'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
               <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M23.95,4.57a10,10,0,0,1-2.82.77,4.96,4.96,0,0,0,2.18-2.72,10.06,10.06,0,0,1-3.12,1.19,4.92,4.92,0,0,0-8.39,4.49A14,14,0,0,1,1.64,3.16,4.92,4.92,0,0,0,3.16,9.72a4.91,4.91,0,0,1-2.22-.61V9.17a4.92,4.92,0,0,0,3.94,4.84,4.91,4.91,0,0,1-2.22.08,4.92,4.92,0,0,0,4.6,3.42A9.87,9.87,0,0,1,0,19.54a13.94,13.94,0,0,0,7.55,2.21,13.9,13.9,0,0,0,14-13.73c0-.21,0-.42,0-.63A10,10,0,0,0,24,4.59Z"/></svg>
             </a>
             {/* Instagram */}
-            <a href="#" style={{ color: 'rgba(255,255,255,0.5)' }} onMouseEnter={e => e.currentTarget.style.color = '#d4a017'} onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}>
+            <a href="#" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#000'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
               <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12,2.16c3.2,0,3.58,0,4.85.07,3.25.15,4.77,1.69,4.92,4.92.06,1.27.07,1.65.07,4.85s0,3.58-.07,4.85c-.15,3.23-1.66,4.77-4.92,4.92-1.27.06-1.65.07-4.85.07s-3.58,0-4.85-.07c-3.26-.15-4.77-1.7-4.92-4.92-.06-1.27-.07-1.65-.07-4.85s0-3.58.07-4.85C2.38,3.92,3.9,2.38,7.15,2.23,8.42,2.17,8.8,2.16,12,2.16ZM12,0C8.74,0,8.33,0,7.05.07c-4.27.2-6.78,2.71-7,7C0,8.33,0,8.74,0,12s0,3.67.07,4.95c.2,4.27,2.71,6.78,7,7,1.28.07,1.69.07,4.95.07s3.67,0,4.95-.07c4.27-.2,6.78-2.71,7-7,.07-1.28.07-1.69.07-4.95s0-3.67-.07-4.95c-.2-4.27-2.71-6.78-7-7C15.67,0,15.26,0,12,0Zm0,5.84A6.16,6.16,0,1,0,18.16,12,6.16,6.16,0,0,0,12,5.84Zm0,10.16A4,4,0,1,1,16,12,4,4,0,0,1,12,16Zm7.84-11a1.44,1.44,0,1,0-1.44,1.44A1.44,1.44,0,0,0,19.84,5.04Z"/></svg>
             </a>
             {/* YouTube */}
-            <a href="#" style={{ color: 'rgba(255,255,255,0.5)' }} onMouseEnter={e => e.currentTarget.style.color = '#d4a017'} onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}>
+            <a href="#" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#000'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
               <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M23.5,6.19a3,3,0,0,0-2.12-2.12C19.54,3.5,12,3.5,12,3.5s-7.54,0-9.38.57A3,3,0,0,0,.5,6.19,31.16,31.16,0,0,0,0,12a31.16,31.16,0,0,0,.5,5.81,3,3,0,0,0,2.12,2.12C4.46,20.5,12,20.5,12,20.5s7.54,0,9.38-.57a3,3,0,0,0,2.12-2.12A31.16,31.16,0,0,0,24,12,31.16,31.16,0,0,0,23.5,6.19ZM9.75,15.5V8.5L15.5,12Z"/></svg>
             </a>
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-sans)' }}>© 2024 CastWise. Fish Smarter.</span>
+            <span style={{ fontSize: 10, color: '#6b7280', fontFamily: 'var(--font-sans)' }}>© 2024 CastWise. Fish Smarter.</span>
           </div>
         </footer>
       </div>
