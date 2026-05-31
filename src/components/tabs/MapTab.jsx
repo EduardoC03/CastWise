@@ -114,36 +114,37 @@ export default function MapTab({
     if (site && onSelect) onSelect(site);
   }, [onSelect]);
 
-  // NEW: Function to generate sleek custom CSS markers
-  const createCustomIcon = (label) => {
+  // ── FIX: Added a safe wrapper class that Leaflet can position, 
+  // keeping our styling safely inside the child div
+  const createCustomIcon = useCallback((label) => {
     const isTop = label?.kind === 'top';
     const isExplore = label?.kind === 'explore';
 
     let htmlContent = '';
-    let className = 'castwise-pin ';
+    let innerClass = 'castwise-pin-inner ';
     let size = 20;
 
     if (isTop) {
-      className += 'castwise-pin-top';
+      innerClass += 'castwise-pin-top';
       htmlContent = `<span>${label.rank}</span>`;
       size = 36;
     } else if (isExplore) {
-      className += 'castwise-pin-explore';
+      innerClass += 'castwise-pin-explore';
       htmlContent = `<span>E</span>`;
       size = 28;
     } else {
-      className += 'castwise-pin-default';
+      innerClass += 'castwise-pin-default';
       size = 16;
     }
 
     return L.divIcon({
-      html: htmlContent,
-      className: className,
+      html: `<div class="${innerClass}">${htmlContent}</div>`,
+      className: 'castwise-pin-wrapper', // Leaflet manipulates this wrapper
       iconSize: [size, size],
       iconAnchor: [size / 2, size / 2],
       popupAnchor: [0, -(size / 2)]
     });
-  };
+  }, []);
 
   return (
     <div className="w-full h-full min-h-[500px] relative bg-[var(--bg-color)] overflow-hidden">
@@ -190,7 +191,7 @@ export default function MapTab({
                 <Tooltip
                   permanent
                   direction="top"
-                  offset={[0, -18]}
+                  offset={[0, -22]}
                   className="castwise-rank-tooltip"
                 >
                   <span style={{ fontWeight: 700 }}>#{label.rank}</span>
@@ -261,8 +262,16 @@ export default function MapTab({
       </div>
 
       <style>{`
-        /* Custom Map Pin Styles */
-        .castwise-pin {
+        /* ── FIX: Cleaned up CSS to prevent transform conflicts with Leaflet ── */
+        
+        .castwise-pin-wrapper {
+          background: transparent !important;
+          border: none !important;
+        }
+
+        .castwise-pin-inner {
+          width: 100%;
+          height: 100%;
           border-radius: 50%;
           display: flex;
           align-items: center;
@@ -273,28 +282,30 @@ export default function MapTab({
           border: 2.5px solid #ffffff;
           transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
-        .castwise-pin:hover {
-          transform: scale(1.15) !important;
+
+        .castwise-pin-inner:hover {
+          transform: scale(1.15);
           box-shadow: 0 6px 16px rgba(0,0,0,0.6);
-          z-index: 9999 !important;
         }
+
         .castwise-pin-top {
           background: linear-gradient(135deg, #f7ce65 0%, #d4a017 100%);
           color: #1a1a1a;
           font-size: 16px;
         }
+
         .castwise-pin-explore {
           background: linear-gradient(135deg, #5aad66 0%, #2f6936 100%);
           color: #ffffff;
           font-size: 14px;
         }
+
         .castwise-pin-default {
           background: #888888;
           border-width: 1.5px;
           opacity: 0.7;
         }
         
-        /* Tooltip Styles */
         .castwise-rank-tooltip {
           background: var(--primary-accent) !important;
           color: var(--text-primary) !important;
@@ -305,6 +316,7 @@ export default function MapTab({
           padding: 2px 8px !important;
           border-radius: 4px !important;
         }
+        
         .castwise-rank-tooltip::before {
           border-top-color: var(--primary-accent) !important;
         }
