@@ -68,8 +68,8 @@ export default function MapTab({
   recommendations = null,
 }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
-  // markerMode: 'all' | 'recommended' | 'none'
-  const [markerMode, setMarkerMode] = useState('all');
+  // markerMode defaults to 'recommended' now instead of 'all'
+  const [markerMode, setMarkerMode] = useState('recommended');
   const mapRef = useRef(null);
 
   // Look up display labels (rank, score) for highlighted sites
@@ -239,14 +239,6 @@ export default function MapTab({
               <div className="text-[9px] font-mono uppercase tracking-widest text-[var(--text-muted)] mb-1.5">
                 Access sites
               </div>
-              <MarkerModeOption
-                value="all"
-                current={markerMode}
-                onSelect={setMarkerMode}
-                Icon={MapPin}
-                label="All sites"
-                hint={`${SITES.length} WDFW access points`}
-              />
               <MarkerModeOption
                 value="recommended"
                 current={markerMode}
