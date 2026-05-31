@@ -72,7 +72,7 @@ export default function Onboarding({ onComplete }) {
   const handleNext = () => {
     const lastQuestionIndex = SLIDES.findIndex(s => s.id === 'access');
     if (currentStep === lastQuestionIndex) {
-      setShowPriorities(true);
+      setTimeout(() => setShowPriorities(true), 280);
       return;
     }
     if (currentStep === SLIDES.length - 1) {
