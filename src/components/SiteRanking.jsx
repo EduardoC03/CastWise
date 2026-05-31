@@ -38,7 +38,11 @@ export function getRecommendations(profile, sites) {
       if (site.species?.length) drivingFeatures.push({ label: 'Species present',  detail: site.species.slice(0, 3).join(', ') });
       return { site, score, drivingFeatures: drivingFeatures.slice(0, 3) };
     })
-    .sort((a, b) => b.score - a.score);
+    // ── FIX: Added deterministic tie-breaker to prevent sites jumping around on refresh
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.site.name.localeCompare(b.site.name);
+    });
 
   const top     = scored.slice(0, 2); // mockup shows top 2
   const explore = scored.slice(2).find(r =>
