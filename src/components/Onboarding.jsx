@@ -253,17 +253,17 @@ export default function Onboarding({ onComplete }) {
         position: 'fixed', inset: 0, zIndex: 50,
         display: 'flex', flexDirection: 'column',
         overflow: 'hidden',
-        backgroundImage: `linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.2)), url(${WELCOME_PHOTO})`,
+        backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.25) 35%, rgba(0,0,0,0.5) 65%, rgba(0,0,0,0.55) 100%), url(${WELCOME_PHOTO})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
       }}>
 
-        {/* Mist overlay on water */}
+        {/* Dark vignette at bottom for footer text legibility */}
         <div style={{
           position: 'absolute', bottom: 0, left: 0, right: 0,
-          height: '30%',
-          background: 'linear-gradient(to top, rgba(255,255,255,0.15), transparent)',
+          height: '25%',
+          background: 'linear-gradient(to top, rgba(0,0,0,0.45), transparent)',
           pointerEvents: 'none',
         }} />
 
@@ -329,11 +329,11 @@ export default function Onboarding({ onComplete }) {
             src={fishLogo}
             alt="CastWise fish"
             style={{
-              width: 120, height: 120,
+              width: 220, height: 220,
               objectFit: 'contain',
-              marginBottom: 32,
-              opacity: 0.92,
-              filter: 'drop-shadow(0 4px 16px rgba(212,160,23,0.4))',
+              marginBottom: 28,
+              opacity: 0.95,
+              filter: 'drop-shadow(0 6px 28px rgba(212,160,23,0.55)) drop-shadow(0 2px 8px rgba(0,0,0,0.4))',
             }}
           />
 
@@ -346,7 +346,7 @@ export default function Onboarding({ onComplete }) {
             letterSpacing: '-0.03em',
             lineHeight: 1,
             marginBottom: 8,
-            filter: 'drop-shadow(0 1px 2px rgba(255,255,255,0.3))',
+            textShadow: '0 2px 16px rgba(0,0,0,0.7), 0 1px 4px rgba(0,0,0,0.5)',
           }}>
             Cast<em style={{ fontStyle: 'italic', color: '#d4a017' }}>Wise</em>
           </h1>
@@ -355,10 +355,11 @@ export default function Onboarding({ onComplete }) {
           <p style={{
             fontSize: 'clamp(16px, 2.5vw, 22px)',
             fontWeight: 500,
-            color: '#1e293b',
+            color: 'rgba(255,255,255,0.9)',
             marginBottom: 40,
             letterSpacing: '-0.01em',
             fontFamily: 'var(--font-sans)',
+            textShadow: '0 1px 8px rgba(0,0,0,0.7)',
           }}>
             Fish smarter, not harder.
           </p>
@@ -399,13 +400,13 @@ export default function Onboarding({ onComplete }) {
           <div style={{ display: 'flex', gap: 24 }}>
             {['Map', 'Picks', 'Species', 'Trip Briefing'].map(l => (
               <a key={l} href="#" style={{
-                color: '#374151', fontSize: 10, fontWeight: 600,
+                color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: 600,
                 fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
                 letterSpacing: '0.12em', textDecoration: 'none',
                 transition: 'color 160ms',
               }}
-                onMouseEnter={e => e.target.style.color = '#000'}
-                onMouseLeave={e => e.target.style.color = '#374151'}
+                onMouseEnter={e => e.target.style.color = '#d4a017'}
+                onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.6)'}
               >
                 {l}
               </a>
@@ -414,22 +415,22 @@ export default function Onboarding({ onComplete }) {
           {/* Social + copyright */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             {/* Facebook */}
-            <a href="#" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#000'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
+            <a href="#" style={{ color: 'rgba(255,255,255,0.5)' }} onMouseEnter={e => e.currentTarget.style.color = '#d4a017'} onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}>
               <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M18.77,7.46H14.5v-1.9c0-.9.6-1.1,1-1.1h3V.5h-4.33C10.24.5,9.5,3.44,9.5,5.32v2.14h-3v4h3v12h5v-12h3.85Z"/></svg>
             </a>
             {/* X / Twitter */}
-            <a href="#" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#000'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
+            <a href="#" style={{ color: 'rgba(255,255,255,0.5)' }} onMouseEnter={e => e.currentTarget.style.color = '#d4a017'} onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}>
               <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M23.95,4.57a10,10,0,0,1-2.82.77,4.96,4.96,0,0,0,2.18-2.72,10.06,10.06,0,0,1-3.12,1.19,4.92,4.92,0,0,0-8.39,4.49A14,14,0,0,1,1.64,3.16,4.92,4.92,0,0,0,3.16,9.72a4.91,4.91,0,0,1-2.22-.61V9.17a4.92,4.92,0,0,0,3.94,4.84,4.91,4.91,0,0,1-2.22.08,4.92,4.92,0,0,0,4.6,3.42A9.87,9.87,0,0,1,0,19.54a13.94,13.94,0,0,0,7.55,2.21,13.9,13.9,0,0,0,14-13.73c0-.21,0-.42,0-.63A10,10,0,0,0,24,4.59Z"/></svg>
             </a>
             {/* Instagram */}
-            <a href="#" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#000'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
+            <a href="#" style={{ color: 'rgba(255,255,255,0.5)' }} onMouseEnter={e => e.currentTarget.style.color = '#d4a017'} onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}>
               <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12,2.16c3.2,0,3.58,0,4.85.07,3.25.15,4.77,1.69,4.92,4.92.06,1.27.07,1.65.07,4.85s0,3.58-.07,4.85c-.15,3.23-1.66,4.77-4.92,4.92-1.27.06-1.65.07-4.85.07s-3.58,0-4.85-.07c-3.26-.15-4.77-1.7-4.92-4.92-.06-1.27-.07-1.65-.07-4.85s0-3.58.07-4.85C2.38,3.92,3.9,2.38,7.15,2.23,8.42,2.17,8.8,2.16,12,2.16ZM12,0C8.74,0,8.33,0,7.05.07c-4.27.2-6.78,2.71-7,7C0,8.33,0,8.74,0,12s0,3.67.07,4.95c.2,4.27,2.71,6.78,7,7,1.28.07,1.69.07,4.95.07s3.67,0,4.95-.07c4.27-.2,6.78-2.71,7-7,.07-1.28.07-1.69.07-4.95s0-3.67-.07-4.95c-.2-4.27-2.71-6.78-7-7C15.67,0,15.26,0,12,0Zm0,5.84A6.16,6.16,0,1,0,18.16,12,6.16,6.16,0,0,0,12,5.84Zm0,10.16A4,4,0,1,1,16,12,4,4,0,0,1,12,16Zm7.84-11a1.44,1.44,0,1,0-1.44,1.44A1.44,1.44,0,0,0,19.84,5.04Z"/></svg>
             </a>
             {/* YouTube */}
-            <a href="#" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#000'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
+            <a href="#" style={{ color: 'rgba(255,255,255,0.5)' }} onMouseEnter={e => e.currentTarget.style.color = '#d4a017'} onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}>
               <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M23.5,6.19a3,3,0,0,0-2.12-2.12C19.54,3.5,12,3.5,12,3.5s-7.54,0-9.38.57A3,3,0,0,0,.5,6.19,31.16,31.16,0,0,0,0,12a31.16,31.16,0,0,0,.5,5.81,3,3,0,0,0,2.12,2.12C4.46,20.5,12,20.5,12,20.5s7.54,0,9.38-.57a3,3,0,0,0,2.12-2.12A31.16,31.16,0,0,0,24,12,31.16,31.16,0,0,0,23.5,6.19ZM9.75,15.5V8.5L15.5,12Z"/></svg>
             </a>
-            <span style={{ fontSize: 10, color: '#6b7280', fontFamily: 'var(--font-sans)' }}>© 2024 CastWise. Fish Smarter.</span>
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-sans)' }}>© 2024 CastWise. Fish Smarter.</span>
           </div>
         </footer>
       </div>
