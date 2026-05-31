@@ -137,6 +137,114 @@ export default function Onboarding({ onComplete }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [currentStep, answers]);
 
+  // ── PRIORITIES SLIDE ─────────────────────────────────────────────────────
+  if (showPriorities) {
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        background: '#0d1a10',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        overflow: 'hidden',
+      }}>
+        <MountainBg />
+        <div style={{
+          position: 'relative', zIndex: 2,
+          width: '100%', maxWidth: 560,
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', padding: '0 28px',
+        }}>
+          <h2 style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700,
+            color: '#f0ede4', letterSpacing: '-0.02em',
+            textAlign: 'center', marginBottom: 10,
+          }}>
+            What matters most to you?
+          </h2>
+          <p style={{
+            fontFamily: 'var(--font-sans)', fontSize: 14,
+            color: 'rgba(240,237,228,0.55)', marginBottom: 28, textAlign: 'center',
+          }}>
+            Pick your top 3 priorities ({priorities.length} / 3 selected)
+          </p>
+
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {PRIORITY_OPTIONS.map(opt => {
+              const sel      = priorities.includes(opt.v);
+              const disabled = !sel && priorities.length >= 3;
+              return (
+                <button
+                  key={opt.v}
+                  disabled={disabled}
+                  onClick={() => handlePrioritySelect(opt.v)}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '15px 20px', borderRadius: 10,
+                    border: sel ? '1.5px solid #d4a017' : '1.5px solid rgba(255,255,255,0.12)',
+                    background: sel ? '#d4a017' : 'rgba(255,255,255,0.05)',
+                    color: sel ? '#0d1a10' : disabled ? 'rgba(240,237,228,0.3)' : '#f0ede4',
+                    fontFamily: 'var(--font-sans)', fontSize: 14,
+                    fontWeight: sel ? 700 : 500, cursor: disabled ? 'not-allowed' : 'pointer',
+                    textAlign: 'left', transition: 'all 180ms',
+                  }}
+                >
+                  <div>
+                    <div>{opt.label}</div>
+                    <div style={{ fontSize: 11, opacity: 0.65, marginTop: 2 }}>{opt.sub}</div>
+                  </div>
+                  <span style={{
+                    width: 24, height: 24, borderRadius: '50%',
+                    border: sel ? 'none' : '1.5px solid rgba(255,255,255,0.25)',
+                    background: sel ? '#0d1a10' : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0, fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700,
+                    color: '#d4a017',
+                  }}>
+                    {sel ? priorities.indexOf(opt.v) + 1 : ''}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
+            <button
+              onClick={() => setShowPriorities(false)}
+              style={{
+                padding: '12px 28px', borderRadius: 6,
+                border: '1px solid rgba(240,237,228,0.3)', background: 'transparent',
+                color: '#f0ede4', fontFamily: 'var(--font-sans)', fontSize: 13,
+                fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              }}
+            >
+              <ChevronLeft size={15} /> Back
+            </button>
+            <button
+              disabled={priorities.length < 3}
+              onClick={finishPriorities}
+              style={{
+                padding: '12px 36px', borderRadius: 6,
+                border: '1px solid rgba(240,237,228,0.3)', background: 'transparent',
+                color: '#f0ede4', fontFamily: 'var(--font-sans)', fontSize: 13,
+                fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
+                cursor: priorities.length < 3 ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', gap: 8,
+                opacity: priorities.length < 3 ? 0.4 : 1,
+                transition: 'border-color 180ms, opacity 180ms',
+              }}
+              onMouseEnter={e => { if (priorities.length >= 3) e.currentTarget.style.borderColor = '#d4a017'; }}
+              onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(240,237,228,0.3)'}
+            >
+              Finish <ChevronRight size={15} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── WELCOME SLIDE ─────────────────────────────────────────────────────────
   if (isWelcome) {
     return (
@@ -492,114 +600,6 @@ export default function Onboarding({ onComplete }) {
               )}
             </>
           )}
-        </div>
-      </div>
-    );
-  }
-
-  // ── PRIORITIES SLIDE ─────────────────────────────────────────────────────
-  if (showPriorities) {
-    return (
-      <div style={{
-        position: 'fixed', inset: 0, zIndex: 50,
-        background: '#0d1a10',
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        overflow: 'hidden',
-      }}>
-        <MountainBg />
-        <div style={{
-          position: 'relative', zIndex: 2,
-          width: '100%', maxWidth: 560,
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', padding: '0 28px',
-        }}>
-          <h2 style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700,
-            color: '#f0ede4', letterSpacing: '-0.02em',
-            textAlign: 'center', marginBottom: 10,
-          }}>
-            What matters most to you?
-          </h2>
-          <p style={{
-            fontFamily: 'var(--font-sans)', fontSize: 14,
-            color: 'rgba(240,237,228,0.55)', marginBottom: 28, textAlign: 'center',
-          }}>
-            Pick your top 3 priorities ({priorities.length} / 3 selected)
-          </p>
-
-          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {PRIORITY_OPTIONS.map(opt => {
-              const sel      = priorities.includes(opt.v);
-              const disabled = !sel && priorities.length >= 3;
-              return (
-                <button
-                  key={opt.v}
-                  disabled={disabled}
-                  onClick={() => handlePrioritySelect(opt.v)}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '15px 20px', borderRadius: 10,
-                    border: sel ? '1.5px solid #d4a017' : '1.5px solid rgba(255,255,255,0.12)',
-                    background: sel ? '#d4a017' : 'rgba(255,255,255,0.05)',
-                    color: sel ? '#0d1a10' : disabled ? 'rgba(240,237,228,0.3)' : '#f0ede4',
-                    fontFamily: 'var(--font-sans)', fontSize: 14,
-                    fontWeight: sel ? 700 : 500, cursor: disabled ? 'not-allowed' : 'pointer',
-                    textAlign: 'left', transition: 'all 180ms',
-                  }}
-                >
-                  <div>
-                    <div>{opt.label}</div>
-                    <div style={{ fontSize: 11, opacity: 0.65, marginTop: 2 }}>{opt.sub}</div>
-                  </div>
-                  <span style={{
-                    width: 24, height: 24, borderRadius: '50%',
-                    border: sel ? 'none' : '1.5px solid rgba(255,255,255,0.25)',
-                    background: sel ? '#0d1a10' : 'transparent',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0, fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700,
-                    color: '#d4a017',
-                  }}>
-                    {sel ? priorities.indexOf(opt.v) + 1 : ''}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
-            <button
-              onClick={() => setShowPriorities(false)}
-              style={{
-                padding: '12px 28px', borderRadius: 6,
-                border: '1px solid rgba(240,237,228,0.3)', background: 'transparent',
-                color: '#f0ede4', fontFamily: 'var(--font-sans)', fontSize: 13,
-                fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-              }}
-            >
-              <ChevronLeft size={15} /> Back
-            </button>
-            <button
-              disabled={priorities.length < 3}
-              onClick={finishPriorities}
-              style={{
-                padding: '12px 36px', borderRadius: 6,
-                border: '1px solid rgba(240,237,228,0.3)', background: 'transparent',
-                color: '#f0ede4', fontFamily: 'var(--font-sans)', fontSize: 13,
-                fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
-                cursor: priorities.length < 3 ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', gap: 8,
-                opacity: priorities.length < 3 ? 0.4 : 1,
-                transition: 'border-color 180ms, opacity 180ms',
-              }}
-              onMouseEnter={e => { if (priorities.length >= 3) e.currentTarget.style.borderColor = '#d4a017'; }}
-              onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(240,237,228,0.3)'}
-            >
-              Finish <ChevronRight size={15} />
-            </button>
-          </div>
         </div>
       </div>
     );
