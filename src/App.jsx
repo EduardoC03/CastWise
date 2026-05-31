@@ -94,23 +94,16 @@ export default function CastWise() {
     return <Onboarding onComplete={handleOnboardingComplete} />;
   }
 
-  // ---- Compute recommendations once for this render ----
-  // Used by: Sidebar (top pick), Map (highlighted sites + popup labels).
   const recommendations = profile ? getRecommendations(profile, SITES) : null;
   const topPick = recommendations?.top[0]?.site || null;
 
-  // Highlighted site IDs = top 3 + explore pick + planned trip site (if any).
-  // The map uses this to know which sites to render in gold and which water
-  // bodies to overlay.
+  // ── FIX: Strictly limit Highlighted IDs to only the 3 recommendations
   const highlightedIds = new Set();
   if (recommendations?.top) {
     recommendations.top.forEach(r => highlightedIds.add(r.site.id));
   }
   if (recommendations?.explore?.site) {
     highlightedIds.add(recommendations.explore.site.id);
-  }
-  if (trip?.site?.id) {
-    highlightedIds.add(trip.site.id);
   }
 
   const renderMainContent = () => {
