@@ -16,6 +16,7 @@ const SLIDES = [
 
 // Background image from src/assets
 import welcomeBg from '../assets/welcome-bg.jpg';
+import fishLogo from '../assets/fish_logo.png';
 const WELCOME_PHOTO = welcomeBg;
 
 // ── Mountain silhouette SVG for question slides ───────────────────────────────
@@ -272,15 +273,17 @@ export default function Onboarding({ onComplete }) {
           display: 'flex', alignItems: 'center',
           justifyContent: 'space-between',
           padding: '24px 32px',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          background: 'rgba(0,0,0,0.18)',
         }}>
           {/* Logo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{
-              width: 32, height: 32, borderRadius: '50%',
-              border: '1px solid #d4a017',
+              width: 32, height: 32,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <span style={{ color: '#d4a017', fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 500 }}>CW</span>
+              <img src={fishLogo} alt="CastWise" style={{ width: 32, height: 32, objectFit: 'contain' }} />
             </div>
             <span style={{
               fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700,
@@ -321,17 +324,18 @@ export default function Onboarding({ onComplete }) {
           padding: '0 16px',
           position: 'relative', zIndex: 10,
         }}>
-          {/* Circle icon */}
-          <div style={{
-            width: 96, height: 96, borderRadius: '50%',
-            border: '2px solid #d4a017',
-            background: 'rgba(0,0,0,0.1)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            marginBottom: 32,
-          }}>
-            <FishIcon size={48} color="#d4a017" />
-          </div>
+          {/* Fish logo */}
+          <img
+            src={fishLogo}
+            alt="CastWise fish"
+            style={{
+              width: 120, height: 120,
+              objectFit: 'contain',
+              marginBottom: 32,
+              opacity: 0.92,
+              filter: 'drop-shadow(0 4px 16px rgba(212,160,23,0.4))',
+            }}
+          />
 
           {/* Wordmark */}
           <h1 style={{
