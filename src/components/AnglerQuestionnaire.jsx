@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronRight, ChevronLeft, Check } from 'lucide-react';
-
+ 
 export const INTAKE_STEPS = [
   { key: 'experience', title: 'How would you describe your experience?', type: 'single',
     options: [
@@ -61,7 +61,7 @@ export const INTAKE_STEPS = [
     ]
   }
 ];
-
+ 
 const PRIORITY_OPTIONS = [
   { v: 'distance', label: 'Distance from home', sub: 'How close the spot is' },
   { v: 'boat-access', label: 'Boat / kayak access', sub: 'Launch ramps or open water' },
@@ -72,7 +72,7 @@ const PRIORITY_OPTIONS = [
   { v: 'regulations', label: 'Simple regulations', sub: 'Easy-to-follow rules' },
   { v: 'beginner-friendly', label: 'Beginner friendly', sub: 'Good for learning' },
 ];
-
+ 
 export default function AnglerQuestionnaire({ onComplete }) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState({
@@ -81,11 +81,11 @@ export default function AnglerQuestionnaire({ onComplete }) {
   });
   const [showPriorities, setShowPriorities] = useState(false);
   const [priorities, setPriorities] = useState([]);
-
+ 
   const current = INTAKE_STEPS[step];
   const value = answers[current.key];
   const canAdvance = current.type === 'multi' ? value.length > 0 : value !== '';
-
+ 
   const handleSelect = (v) => {
     if (current.key === 'gear' && v === 'none') {
       // Selecting "None" clears all other gear selections, and vice versa
@@ -101,7 +101,7 @@ export default function AnglerQuestionnaire({ onComplete }) {
       setAnswers({ ...answers, [current.key]: v });
     }
   };
-
+ 
   const handlePrioritySelect = (v) => {
     if (priorities.includes(v)) {
       setPriorities(priorities.filter(x => x !== v));
@@ -109,16 +109,16 @@ export default function AnglerQuestionnaire({ onComplete }) {
       setPriorities([...priorities, v]);
     }
   };
-
+ 
   const next = () => {
     if (step < INTAKE_STEPS.length - 1) setStep(step + 1);
     else setShowPriorities(true);
   };
-
+ 
   const finishWithPriorities = () => {
     onComplete({ ...answers, priorities });
   };
-
+ 
   if (showPriorities) {
     return (
       <div className="cw-screen cw-intake">
@@ -130,7 +130,7 @@ export default function AnglerQuestionnaire({ onComplete }) {
         </div>
         <h2 className="cw-intake-title">What matters most to you?</h2>
         <p className="cw-intake-sub">Pick your top 3 priorities ({priorities.length} / 3 selected)</p>
-
+ 
         <div className="cw-options">
           {PRIORITY_OPTIONS.map(opt => {
             const sel = priorities.includes(opt.v);
@@ -153,7 +153,7 @@ export default function AnglerQuestionnaire({ onComplete }) {
             );
           })}
         </div>
-
+ 
         <div className="cw-intake-actions">
           <button className="cw-btn cw-btn-ghost" onClick={() => setShowPriorities(false)}>
             <ChevronLeft size={14}/> Back
@@ -165,7 +165,7 @@ export default function AnglerQuestionnaire({ onComplete }) {
       </div>
     );
   }
-
+ 
   return (
     <div className="cw-screen cw-intake">
       <div className="cw-intake-head">
@@ -176,7 +176,7 @@ export default function AnglerQuestionnaire({ onComplete }) {
       </div>
       <h2 className="cw-intake-title">{current.title}</h2>
       {current.type === 'multi' && <p className="cw-intake-sub">Select all that apply</p>}
-
+ 
       <div className="cw-options">
         {current.options.map(opt => {
           const sel = current.type === 'multi' ? value.includes(opt.v) : value === opt.v;
@@ -191,7 +191,7 @@ export default function AnglerQuestionnaire({ onComplete }) {
           );
         })}
       </div>
-
+ 
       <div className="cw-intake-actions">
         {step > 0 && (
           <button className="cw-btn cw-btn-ghost" onClick={() => setStep(step - 1)}>
