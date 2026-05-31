@@ -2,11 +2,21 @@ import React, { useState, useMemo, useRef } from 'react';
 import { MapPin, Bell, Search, ChevronRight, Settings, Calendar, Droplets, Sparkles, Sun } from 'lucide-react';
 import MapTab from './tabs/MapTab';
 import { SITES, STOCKING_UPDATES } from '../data/sites';
+import { getRecommendations } from './SiteRanking';
 
 export default function MapView({ profile, trip, onSelect, onViewTrip, onReset }) {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('map');
   
+  const recommendations = useMemo(() => getRecommendations(profile, SITES), [profile]);
+  
+  const highlightedIds = useMemo(() => {
+    const ids = new Set();
+    if (recommendations.top) recommendations.top.forEach(r => ids.add(r.site.id));
+    if (recommendations.explore && recommendations.explore.site) ids.add(recommendations.explore.site.id);
+    return ids;
+  }, [recommendations]);
+
   const filtered = useMemo(() => SITES.filter(s => {
     if (profile.travel === 'local' && s.region !== profile.location) return false;
     if (search && !s.name.toLowerCase().includes(search.toLowerCase()) && !s.county.toLowerCase().includes(search.toLowerCase())) return false;
@@ -45,7 +55,11 @@ export default function MapView({ profile, trip, onSelect, onViewTrip, onReset }
       {tab === 'map' && (
         <div className="cw-map-layout" style={{ position: 'relative', zIndex: 0 }}>
           <div className="cw-map-atlas-container">
-            <MapTab onSelect={onSelect} filteredSites={filtered} />
+            <MapTab 
+              onSelect={onSelect} 
+              highlightedIds={highlightedIds} 
+              recommendations={recommendations} 
+            />
           </div>
 
           <div className="cw-map-list-section">
