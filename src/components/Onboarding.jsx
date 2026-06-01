@@ -6,13 +6,66 @@ const SLIDES = [
   { id: 'name',       type: 'input',  heading: 'First, what should we call you?', placeholder: 'Your first name' },
   { id: 'experience', type: 'choice', heading: 'How would you describe your fishing experience?', options: ['Beginner', 'Intermediate', 'Advanced'] },
   { id: 'frequency',  type: 'choice', heading: 'How often do you fish?', options: ['A few times a year', 'Monthly', 'Weekly', 'Almost daily'] },
-  { id: 'gear',       type: 'multi',  heading: 'What gear do you own?', options: ['Spinning rod', 'Fly rod', 'Bait rod', 'Waders', 'Boat', 'Electronics'] },
+  { id: 'gear',       type: 'multi',  heading: 'What gear do you own?', options: ['Spinning rod', 'Fly rod', 'Bait rod', 'Waders', 'Boat', 'Electronics', 'None'] },
   { id: 'styles',     type: 'multi',  heading: 'What fishing styles do you prefer?', options: ['Spin fishing', 'Fly fishing', 'Bait fishing', 'Trolling', 'Ice fishing'] },
   { id: 'region',     type: 'choice', heading: 'Where in Washington are you based?', options: ['Northwest WA', 'Southwest WA', 'Central WA', 'Eastern WA'] },
   { id: 'travel',     type: 'choice', heading: 'How far are you willing to travel to fish?', options: ['Local only (under 30 min)', 'Up to 1 hour', 'Up to 2 hours', 'Anywhere in WA'] },
   { id: 'access',     type: 'choice', heading: 'How do you prefer to access the water?', options: ['Bank fishing', 'Wade fishing', 'Boat / kayak'] },
   { id: 'completion', type: 'completion' },
 ];
+
+const PRIORITY_OPTIONS = [
+  {
+    v: 'experience',
+    label: 'Experience level',
+    sub: 'Matching spots to your skill'
+  },
+  {
+    v: 'frequency',
+    label: 'How often you fish',
+    sub: 'Based on your fishing schedule'
+  },
+  {
+    v: 'gear',
+    label: 'Gear you own',
+    sub: 'Access based on your equipment'
+  },
+  {
+    v: 'styles',
+    label: 'Fishing styles',
+    sub: 'Your preferred techniques'
+  },
+  {
+    v: 'region',
+    label: 'Your region',
+    sub: 'Spots near where you live'
+  },
+  {
+    v: 'travel',
+    label: 'Travel distance',
+    sub: "How far you'll go"
+  },
+  {
+    v: 'access',
+    label: 'Water access type',
+    sub: 'Bank, wade, or boat'
+  }
+];
+
+const handlePrioritySelect = (v) => {
+  if (priorities.includes(v)) {
+    setPriorities(priorities.filter(x => x !== v));
+  } else if (priorities.length < 3) {
+    setPriorities([...priorities, v]);
+  }
+};
+
+const finishPriorities = () => {
+  setShowPriorities(false);
+  setCurrentStep(
+    SLIDES.findIndex(s => s.id === 'completion')
+  );
+};
 
 // Background image from src/assets
 import welcomeBg from '../assets/welcome-bg.jpg';
@@ -49,6 +102,8 @@ export default function Onboarding({ onComplete }) {
     name: '', experience: '', frequency: '', gear: [],
     styles: [], region: '', travel: '', access: '',
   });
+  const [showPriorities, setShowPriorities] = useState(false);
+  const [priorities, setPriorities] = useState([]);
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -57,26 +112,70 @@ export default function Onboarding({ onComplete }) {
     }
   }, [currentStep]);
 
+  const lastQuestionIndex =
+  SLIDES.findIndex(s => s.id === 'access');
+
+  if (currentStep === lastQuestionIndex) {
+  setTimeout(() => {
+    setShowPriorities(true);
+  }, 280);
+  return;
+  }
+
   const handleNext = () => {
     if (currentStep === SLIDES.length - 1) {
-      onComplete({ ...answers, completedAt: new Date().toISOString() });
+      onComplete({ ...answers, priorities, completedAt: new Date().toISOString() });
       return;
     }
     const advance = () => setCurrentStep(p => p + 1);
     SLIDES[currentStep].type === 'choice' ? setTimeout(advance, 280) : advance();
   };
 
+  const handlePrioritySelect = (v) => {
+  if (priorities.includes(v)) {
+    setPriorities(priorities.filter(x => x !== v));
+  } else if (priorities.length < 3) {
+    setPriorities([...priorities, v]);
+  }
+};
+
+const finishPriorities = () => {
+  setShowPriorities(false);
+  setCurrentStep(
+    SLIDES.findIndex(s => s.id === 'completion')
+  );
+};
+
   const handleBack = () => currentStep > 0 && setCurrentStep(p => p - 1);
 
   const handleSelect = (val) => {
     const slide = SLIDES[currentStep];
-    if (slide.type === 'multi') {
-      const cur = answers[slide.id] || [];
-      setAnswers({ ...answers, [slide.id]: cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val] });
-    } else {
-      setAnswers({ ...answers, [slide.id]: val });
-      handleNext();
-    }
+    if (slide.id === 'gear') {
+  if (val === 'None') {
+    const cur = answers.gear || [];
+
+    setAnswers({
+      ...answers,
+      gear: cur.includes('None')
+        ? []
+        : ['None']
+    });
+  } else {
+    const cur =
+      (answers.gear || []).filter(
+        x => x !== 'None'
+      );
+
+    setAnswers({
+      ...answers,
+      gear: cur.includes(val)
+        ? cur.filter(x => x !== val)
+        : [...cur, val]
+    });
+  }
+
+  return;
+}
   };
 
   const scrollToSection = (id) => {
@@ -103,6 +202,17 @@ export default function Onboarding({ onComplete }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [currentStep, answers]);
+
+  // ── PRIORITIES SLIDE ─────────────────────────────────────────────────────
+  if (showPriorities) {
+    <button
+  onClick={() => setShowPriorities(false)}
+>
+  <ChevronLeft size={15} />
+  Back
+</button>
+  }
+  
 
   // ── WELCOME & SINGLE PAGE HOMEPAGE ────────────────────────────────────────
   if (isWelcome) {
