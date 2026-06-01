@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Fish, Trophy, ChevronRight, Plus, Loader2, MapPin } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Fish, ChevronRight, Plus, MapPin } from 'lucide-react';
 import { getRecommendations } from './SiteRanking';
 import { SITES } from '../data/sites';
 
@@ -10,35 +10,6 @@ const REGION_COORDS = {
   'Southwest WA': { lat: 46.1400, lng: -122.9390 },
   'Central WA':   { lat: 47.0379, lng: -120.3265 },
   'Eastern WA':   { lat: 47.6588, lng: -117.4260 },
-};
-
-const weatherLabel = (code) => {
-  if (code === 0)  return 'Clear';
-  if (code <= 3)   return 'Partly Cloudy';
-  if (code <= 48)  return 'Fog';
-  if (code <= 67)  return 'Rain';
-  if (code <= 77)  return 'Snow';
-  if (code <= 82)  return 'Showers';
-  if (code <= 99)  return 'Thunderstorm';
-  return 'Cloudy';
-};
-
-const moonPhaseLabel = (phase) => {
-  // phase is 0–1 from open-meteo daily moon_phase
-  if (phase < 0.0625 || phase >= 0.9375) return 'New Moon';
-  if (phase < 0.1875) return 'Waxing Crescent';
-  if (phase < 0.3125) return 'First Quarter';
-  if (phase < 0.4375) return 'Waxing Gibbous';
-  if (phase < 0.5625) return 'Full Moon';
-  if (phase < 0.6875) return 'Waning Gibbous';
-  if (phase < 0.8125) return 'Last Quarter';
-  return 'Waning Crescent';
-};
-
-const formatTime = (isoString) => {
-  if (!isoString) return '—';
-  const d = new Date(isoString);
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 };
 
 const greeting = () => {
@@ -55,6 +26,19 @@ const distanceMiles = (lat1, lng1, lat2, lng2) => {
   const dLng = (lng2 - lng1) * Math.PI / 180;
   const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+};
+
+// ── Hard-coded weather (sidebar preview only) ──────────────────────────────
+// Static values so the sidebar doesn't depend on the open-meteo API.
+const WEATHER = {
+  label:    'Partly Cloudy',
+  temp:     64,
+  wind:     '7 mph SW',
+  humidity: '68%',
+  pressure: '30.08 in',
+  sunrise:  '5:14 AM',
+  sunset:   '9:08 PM',
+  moon:     'Waxing Gibbous',
 };
 
 // ── Style tokens — dark green sidebar matching reference ───────────────────
@@ -97,44 +81,6 @@ export default function Sidebar({ profile, onNavigate }) {
   const [catchForm,     setCatchForm]     = useState(EMPTY_FORM);
   const [catches,       setCatches]       = useState([]);
   const [editingId,     setEditingId]     = useState(null);
-  const [weather,       setWeather]       = useState(null);
-  const [weatherLoading, setWeatherLoading] = useState(true);
-
-  // ── Expanded weather fetch (adds humidity, pressure, sunrise, sunset, moon) ─
-  useEffect(() => {
-    setWeatherLoading(true);
-    const coords = REGION_COORDS[profile?.region] || REGION_COORDS['Northwest WA'];
-    const today  = new Date().toISOString().split('T')[0];
-    fetch(
-      `https://api.open-meteo.com/v1/forecast` +
-      `?latitude=${coords.lat}&longitude=${coords.lng}` +
-      `&current=temperature_2m,wind_speed_10m,wind_direction_10m,precipitation,weathercode,relative_humidity_2m,surface_pressure` +
-      `&daily=sunrise,sunset,moon_phase` +
-      `&temperature_unit=fahrenheit&wind_speed_unit=mph` +
-      `&timezone=auto&start_date=${today}&end_date=${today}`
-    )
-      .then(r => r.json())
-      .then(d => {
-        const c = d.current;
-        const dl = d.daily;
-        // Wind direction compass
-        const dirs = ['N','NE','E','SE','S','SW','W','NW'];
-        const compassDir = dirs[Math.round(c.wind_direction_10m / 45) % 8];
-        setWeather({
-          label:     weatherLabel(c.weathercode),
-          temp:      Math.round(c.temperature_2m),
-          wind:      `${Math.round(c.wind_speed_10m)} mph ${compassDir}`,
-          humidity:  `${Math.round(c.relative_humidity_2m)}%`,
-          pressure:  `${(c.surface_pressure * 0.02953).toFixed(2)} in`,
-          precip:    c.precipitation,
-          sunrise:   formatTime(dl?.sunrise?.[0]),
-          sunset:    formatTime(dl?.sunset?.[0]),
-          moon:      moonPhaseLabel(dl?.moon_phase?.[0] ?? 0),
-        });
-      })
-      .catch(() => setWeather(null))
-      .finally(() => setWeatherLoading(false));
-  }, [profile?.region]);
 
   // ── Nearby lakes: SITES sorted by distance from region center ─────────────
   const nearbyLakes = useMemo(() => {
@@ -190,34 +136,26 @@ export default function Sidebar({ profile, onNavigate }) {
         )}
       </div>
 
-      {/* ── Expanded Weather ── */}
+      {/* ── Expanded Weather (hard-coded) ── */}
       <div style={S.section}>
         <div style={S.secLabel}>Expanded Weather Details</div>
-        {weatherLoading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0' }}>
-            <Loader2 size={16} className="cw-spin" style={{ color: '#d4a017' }} />
-          </div>
-        ) : weather ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {[
-              { icon: W_ICONS.forecast, label: "Today's Forecast", val: weather.label   },
-              { icon: W_ICONS.temp,     label: 'Air Temp',          val: `${weather.temp}°F` },
-              { icon: W_ICONS.wind,     label: 'Wind',              val: weather.wind    },
-              { icon: W_ICONS.humidity, label: 'Humidity',          val: weather.humidity },
-              { icon: W_ICONS.pressure, label: 'Pressure',          val: weather.pressure },
-              { icon: W_ICONS.sunrise,  label: 'Sunrise',           val: weather.sunrise },
-              { icon: W_ICONS.sunset,   label: 'Sunset',            val: weather.sunset  },
-              { icon: W_ICONS.moon,     label: 'Moon Phase',        val: weather.moon    },
-            ].map(({ icon, label, val }) => (
-              <div key={label} style={S.row}>
-                <span style={S.rowLabel}><span style={{ fontSize: 13 }}>{icon}</span>{label}:</span>
-                <span style={S.rowVal}>{val}</span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div style={{ fontSize: 12, color: 'rgba(232,228,216,0.45)', fontStyle: 'italic' }}>Conditions unavailable</div>
-        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {[
+            { icon: W_ICONS.forecast, label: "Today's Forecast", val: WEATHER.label    },
+            { icon: W_ICONS.temp,     label: 'Air Temp',          val: `${WEATHER.temp}°F` },
+            { icon: W_ICONS.wind,     label: 'Wind',              val: WEATHER.wind     },
+            { icon: W_ICONS.humidity, label: 'Humidity',          val: WEATHER.humidity },
+            { icon: W_ICONS.pressure, label: 'Pressure',          val: WEATHER.pressure },
+            { icon: W_ICONS.sunrise,  label: 'Sunrise',           val: WEATHER.sunrise  },
+            { icon: W_ICONS.sunset,   label: 'Sunset',            val: WEATHER.sunset   },
+            { icon: W_ICONS.moon,     label: 'Moon Phase',        val: WEATHER.moon     },
+          ].map(({ icon, label, val }) => (
+            <div key={label} style={S.row}>
+              <span style={S.rowLabel}><span style={{ fontSize: 13 }}>{icon}</span>{label}:</span>
+              <span style={S.rowVal}>{val}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ── Catch Log ── */}
