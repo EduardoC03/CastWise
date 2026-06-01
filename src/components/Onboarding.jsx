@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronRight, ChevronLeft, Check } from 'lucide-react';
+import welcomeBg from '../assets/welcome-bg.jpg';
+import fishLogo from '../assets/fish_logo_transparent.png';
+
+const WELCOME_PHOTO = welcomeBg;
 
 const SLIDES = [
   { id: 'welcome',    type: 'welcome' },
@@ -15,62 +19,14 @@ const SLIDES = [
 ];
 
 const PRIORITY_OPTIONS = [
-  {
-    v: 'experience',
-    label: 'Experience level',
-    sub: 'Matching spots to your skill'
-  },
-  {
-    v: 'frequency',
-    label: 'How often you fish',
-    sub: 'Based on your fishing schedule'
-  },
-  {
-    v: 'gear',
-    label: 'Gear you own',
-    sub: 'Access based on your equipment'
-  },
-  {
-    v: 'styles',
-    label: 'Fishing styles',
-    sub: 'Your preferred techniques'
-  },
-  {
-    v: 'region',
-    label: 'Your region',
-    sub: 'Spots near where you live'
-  },
-  {
-    v: 'travel',
-    label: 'Travel distance',
-    sub: "How far you'll go"
-  },
-  {
-    v: 'access',
-    label: 'Water access type',
-    sub: 'Bank, wade, or boat'
-  }
+  { v: 'experience', label: 'Experience level',  sub: 'Matching spots to your skill' },
+  { v: 'frequency',  label: 'How often you fish', sub: 'Based on your fishing schedule' },
+  { v: 'gear',       label: 'Gear you own',       sub: 'Access based on your equipment' },
+  { v: 'styles',     label: 'Fishing styles',     sub: 'Your preferred techniques' },
+  { v: 'region',     label: 'Your region',        sub: 'Spots near where you live' },
+  { v: 'travel',     label: 'Travel distance',    sub: "How far you'll go" },
+  { v: 'access',     label: 'Water access type',  sub: 'Bank, wade, or boat' },
 ];
-
-const handlePrioritySelect = (v) => {
-  if (priorities.includes(v)) {
-    setPriorities(priorities.filter(x => x !== v));
-  } else if (priorities.length < 3) {
-    setPriorities([...priorities, v]);
-  }
-};
-
-const finishPriorities = () => {
-  setShowPriorities(false);
-  setCurrentStep(
-    SLIDES.findIndex(s => s.id === 'completion')
-  );
-};
-
-// Background image from src/assets
-import welcomeBg from '../assets/welcome-bg.jpg';
-import fishLogo from '../assets/fish_logo_transparent.png';
-const WELCOME_PHOTO = welcomeBg;
 
 // ── Mountain silhouette SVG for question slides ───────────────────────────────
 function MountainBg() {
@@ -106,76 +62,85 @@ export default function Onboarding({ onComplete }) {
   const [priorities, setPriorities] = useState([]);
   const inputRef = useRef(null);
 
+  const accessIndex     = SLIDES.findIndex(s => s.id === 'access');
+  const completionIndex = SLIDES.findIndex(s => s.id === 'completion');
+
+  // Auto-focus the name input when it appears
   useEffect(() => {
     if (SLIDES[currentStep].type === 'input' && inputRef.current) {
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [currentStep]);
 
-  const lastQuestionIndex =
-  SLIDES.findIndex(s => s.id === 'access');
-
-  if (currentStep === lastQuestionIndex) {
-  setTimeout(() => {
-    setShowPriorities(true);
-  }, 280);
-  return;
-  }
-
   const handleNext = () => {
+    // Submit on completion slide
     if (currentStep === SLIDES.length - 1) {
       onComplete({ ...answers, priorities, completedAt: new Date().toISOString() });
       return;
     }
+
+    // After the last question (access), open the priorities slide instead of advancing
+    if (currentStep === accessIndex) {
+      const open = () => setShowPriorities(true);
+      SLIDES[currentStep].type === 'choice' ? setTimeout(open, 280) : open();
+      return;
+    }
+
     const advance = () => setCurrentStep(p => p + 1);
     SLIDES[currentStep].type === 'choice' ? setTimeout(advance, 280) : advance();
   };
-
-  const handlePrioritySelect = (v) => {
-  if (priorities.includes(v)) {
-    setPriorities(priorities.filter(x => x !== v));
-  } else if (priorities.length < 3) {
-    setPriorities([...priorities, v]);
-  }
-};
-
-const finishPriorities = () => {
-  setShowPriorities(false);
-  setCurrentStep(
-    SLIDES.findIndex(s => s.id === 'completion')
-  );
-};
 
   const handleBack = () => currentStep > 0 && setCurrentStep(p => p - 1);
 
   const handleSelect = (val) => {
     const slide = SLIDES[currentStep];
+
+    // Gear has the "None" exclusivity rule
     if (slide.id === 'gear') {
-  if (val === 'None') {
-    const cur = answers.gear || [];
+      if (val === 'None') {
+        const cur = answers.gear || [];
+        setAnswers({
+          ...answers,
+          gear: cur.includes('None') ? [] : ['None'],
+        });
+      } else {
+        const cur = (answers.gear || []).filter(x => x !== 'None');
+        setAnswers({
+          ...answers,
+          gear: cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val],
+        });
+      }
+      return;
+    }
 
-    setAnswers({
-      ...answers,
-      gear: cur.includes('None')
-        ? []
-        : ['None']
-    });
-  } else {
-    const cur =
-      (answers.gear || []).filter(
-        x => x !== 'None'
-      );
+    // Generic multi-select: toggle the value
+    if (slide.type === 'multi') {
+      const cur = answers[slide.id] || [];
+      setAnswers({
+        ...answers,
+        [slide.id]: cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val],
+      });
+      return;
+    }
 
-    setAnswers({
-      ...answers,
-      gear: cur.includes(val)
-        ? cur.filter(x => x !== val)
-        : [...cur, val]
-    });
-  }
+    // Single-choice: set and auto-advance
+    if (slide.type === 'choice') {
+      setAnswers({ ...answers, [slide.id]: val });
+      handleNext();
+    }
+  };
 
-  return;
-}
+  const handlePrioritySelect = (v) => {
+    if (priorities.includes(v)) {
+      setPriorities(priorities.filter(x => x !== v));
+    } else if (priorities.length < 3) {
+      setPriorities([...priorities, v]);
+    }
+  };
+
+  const finishPriorities = () => {
+    setShowPriorities(false);
+    setCurrentStep(completionIndex);
   };
 
   const scrollToSection = (id) => {
@@ -186,33 +151,166 @@ const finishPriorities = () => {
   };
 
   const slide        = SLIDES[currentStep];
-  const progress     = (currentStep / (SLIDES.length - 1)) * 100;
+  const progress     = showPriorities
+    ? 96
+    : (currentStep / (SLIDES.length - 1)) * 100;
   const isGrid       = slide.options?.length > 3;
   const isWelcome    = slide.type === 'welcome';
   const isCompletion = slide.type === 'completion';
   const showBack     = currentStep > 0 && !isWelcome && !isCompletion;
 
+  // Global Enter-to-continue keyboard shortcut
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== 'Enter') return;
+      if (showPriorities) {
+        if (priorities.length > 0) finishPriorities();
+        return;
+      }
       if (slide.type === 'input'   && answers.name.trim())               handleNext();
       if (slide.type === 'multi'   && (answers[slide.id] || []).length)  handleNext();
       if (slide.type === 'welcome' || slide.type === 'completion')       handleNext();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [currentStep, answers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, answers, showPriorities, priorities]);
 
   // ── PRIORITIES SLIDE ─────────────────────────────────────────────────────
   if (showPriorities) {
-    <button
-  onClick={() => setShowPriorities(false)}
->
-  <ChevronLeft size={15} />
-  Back
-</button>
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        background: '#0d1a10',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        overflow: 'hidden',
+      }}>
+        <MountainBg />
+
+        {/* Progress bar */}
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'rgba(255,255,255,0.08)' }}>
+          <div style={{ height: '100%', width: `${progress}%`, background: '#d4a017', transition: 'width 450ms cubic-bezier(0.4,0,0.2,1)' }} />
+        </div>
+
+        {/* Back button — returns to the last question */}
+        <button
+          onClick={() => setShowPriorities(false)}
+          style={{
+            position: 'absolute', top: 24, left: 24,
+            background: 'none', border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6,
+            fontFamily: 'var(--font-mono)', fontSize: 10,
+            letterSpacing: '0.2em', textTransform: 'uppercase',
+            color: 'rgba(240,237,228,0.45)', transition: 'color 150ms',
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = 'rgba(240,237,228,0.9)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'rgba(240,237,228,0.45)'}
+        >
+          <ChevronLeft size={13} /> Back
+        </button>
+
+        <div style={{
+          position: 'relative', zIndex: 2,
+          width: '100%', maxWidth: 640,
+          padding: '0 28px',
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+        }}>
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 10,
+            letterSpacing: '0.22em', textTransform: 'uppercase',
+            color: '#d4a017', marginBottom: 16, textAlign: 'center',
+          }}>
+            Final Step
+          </div>
+
+          <h2 style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 'clamp(28px, 4vw, 40px)',
+            fontWeight: 700, color: '#f0ede4',
+            textAlign: 'center', lineHeight: 1.15,
+            letterSpacing: '-0.02em', marginBottom: 8,
+          }}>
+            Which factors matter most to you?
+          </h2>
+
+          <p style={{
+            fontFamily: 'var(--font-sans)', fontSize: 14,
+            color: 'rgba(240,237,228,0.55)',
+            textAlign: 'center', marginBottom: 28,
+          }}>
+            Pick up to 3 — we'll weight your recommendations by these.
+          </p>
+
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {PRIORITY_OPTIONS.map(opt => {
+              const rank = priorities.indexOf(opt.v);
+              const sel = rank !== -1;
+              const atCap = !sel && priorities.length >= 3;
+              return (
+                <button
+                  key={opt.v}
+                  onClick={() => handlePrioritySelect(opt.v)}
+                  disabled={atCap}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '16px 20px', borderRadius: 10,
+                    border: sel ? '1.5px solid #d4a017' : '1.5px solid rgba(255,255,255,0.12)',
+                    background: sel ? 'rgba(212,160,23,0.12)' : 'rgba(255,255,255,0.04)',
+                    color: '#f0ede4',
+                    fontFamily: 'var(--font-sans)',
+                    cursor: atCap ? 'not-allowed' : 'pointer',
+                    opacity: atCap ? 0.4 : 1,
+                    textAlign: 'left', transition: 'all 180ms',
+                  }}
+                  onMouseEnter={e => { if (!sel && !atCap) e.currentTarget.style.borderColor = 'rgba(212,160,23,0.5)'; }}
+                  onMouseLeave={e => { if (!sel && !atCap) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
+                >
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 15, fontWeight: 600 }}>{opt.label}</span>
+                    <span style={{ fontSize: 12, color: 'rgba(240,237,228,0.5)' }}>{opt.sub}</span>
+                  </span>
+                  <span style={{
+                    width: 26, height: 26, borderRadius: '50%',
+                    border: sel ? 'none' : '1.5px solid rgba(255,255,255,0.25)',
+                    background: sel ? '#d4a017' : 'transparent',
+                    color: '#0d1a10',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                    fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700,
+                  }}>
+                    {sel ? rank + 1 : ''}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ marginTop: 28 }}>
+            <button
+              disabled={priorities.length === 0}
+              onClick={finishPriorities}
+              style={{
+                padding: '12px 36px',
+                border: '1px solid rgba(240,237,228,0.3)', borderRadius: 6,
+                background: 'transparent', color: '#f0ede4',
+                fontFamily: 'var(--font-sans)', fontSize: 13,
+                fontWeight: 600, letterSpacing: '0.08em',
+                textTransform: 'uppercase', cursor: priorities.length === 0 ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', gap: 8,
+                opacity: priorities.length === 0 ? 0.4 : 1,
+                transition: 'border-color 180ms, opacity 180ms',
+              }}
+              onMouseEnter={e => { if (priorities.length > 0) e.currentTarget.style.borderColor = '#d4a017'; }}
+              onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(240,237,228,0.3)'}
+            >
+              Continue <ChevronRight size={15} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
-  
 
   // ── WELCOME & SINGLE PAGE HOMEPAGE ────────────────────────────────────────
   if (isWelcome) {
@@ -221,7 +319,7 @@ const finishPriorities = () => {
         position: 'fixed', inset: 0, zIndex: 50,
         display: 'flex', flexDirection: 'column',
         overflowY: 'auto',
-        background: '#0a1a0e', 
+        background: '#0a1a0e',
         scrollBehavior: 'smooth',
       }}>
 
@@ -290,7 +388,7 @@ const finishPriorities = () => {
                 const sectionIds = ['map', 'picks', 'species', 'trip-briefing'];
                 return (
                   <li key={l}>
-                    <button 
+                    <button
                       onClick={() => scrollToSection(sectionIds[index])}
                       style={{
                         background: 'none', border: 'none', cursor: 'pointer',
@@ -298,8 +396,8 @@ const finishPriorities = () => {
                         fontFamily: 'var(--font-sans)', letterSpacing: '0.04em',
                         transition: 'color 200ms', padding: 0,
                       }}
-                      onMouseEnter={e => e.target.style.color = '#d4a017'}
-                      onMouseLeave={e => e.target.style.color = '#ffffff'}
+                      onMouseEnter={e => e.currentTarget.style.color = '#d4a017'}
+                      onMouseLeave={e => e.currentTarget.style.color = '#ffffff'}
                     >
                       {l}
                     </button>
@@ -339,29 +437,26 @@ const finishPriorities = () => {
                 style={{
                   width: 72, height: 72,
                   objectFit: 'contain',
-                  filter: 'drop-shadow(0 2px 8px rgba(212,160,23,0.3))',
                 }}
               />
             </div>
 
-            {/* Wordmark */}
             <h1 style={{
               fontFamily: 'var(--font-display)',
-              fontSize: 'clamp(64px, 10vw, 96px)',
+              fontSize: 'clamp(48px, 7vw, 84px)',
               fontWeight: 700,
               color: '#ffffff',
               letterSpacing: '-0.03em',
-              lineHeight: 1,
-              marginBottom: 8,
-              filter: 'drop-shadow(0 1px 2px rgba(255,255,255,0.3))',
+              lineHeight: 1.05,
+              margin: '0 0 16px 0',
+              textShadow: '0 4px 30px rgba(0,0,0,0.4)',
             }}>
-              Cast<em style={{ fontStyle: 'italic', color: '#d4a017' }}>Wise</em>
+              Welcome to Cast<em style={{ fontStyle: 'italic', color: '#d4a017' }}>Wise</em>
             </h1>
 
-            {/* Tagline */}
             <p style={{
-              fontSize: 'clamp(16px, 2.5vw, 22px)',
-              fontWeight: 500,
+              fontSize: 'clamp(18px, 2vw, 22px)',
+              fontWeight: 300,
               color: '#cbd5e1',
               marginBottom: 40,
               letterSpacing: '-0.01em',
@@ -622,8 +717,8 @@ const finishPriorities = () => {
             {['Map', 'Picks', 'Species', 'Trip Briefing'].map((l, index) => {
               const sectionIds = ['map', 'picks', 'species', 'trip-briefing'];
               return (
-                <button 
-                  key={l} 
+                <button
+                  key={l}
                   onClick={() => scrollToSection(sectionIds[index])}
                   style={{
                     background: 'none', border: 'none', cursor: 'pointer',
@@ -632,8 +727,8 @@ const finishPriorities = () => {
                     letterSpacing: '0.12em', padding: 0,
                     transition: 'color 160ms',
                   }}
-                  onMouseEnter={e => e.target.style.color = '#d4a017'}
-                  onMouseLeave={e => e.target.style.color = '#4b5563'}
+                  onMouseEnter={e => e.currentTarget.style.color = '#d4a017'}
+                  onMouseLeave={e => e.currentTarget.style.color = '#4b5563'}
                 >
                   {l}
                 </button>
@@ -643,20 +738,20 @@ const finishPriorities = () => {
           {/* Social + copyright */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             {/* Facebook */}
-            <a href="#" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#000'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
+            <a href="#" aria-label="Facebook" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#d4a017'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
               <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M18.77,7.46H14.5v-1.9c0-.9.6-1.1,1-1.1h3V.5h-4.33C10.24.5,9.5,3.44,9.5,5.32v2.14h-3v4h3v12h5v-12h3.85Z"/></svg>
             </a>
             {/* X / Twitter */}
-            <a href="#" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#000'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
-              <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M23.95,4.57a10,10,0,0,1-2.82.77,4.96,4.96,0,0,0,2.18-2.72,10.06,10.06,0,0,1-3.12,1.19,4.92,4.92,0,0,0-8.39,4.49A14,14,0,0,1,1.64,3.16,4.92,4.92,0,0,0,3.16,9.72a4.91,4.91,0,0,1-2.22-.61V9.17a4.92,4.92,0,0,0,3.94,4.84,4.91,4.91,0,0,1-2.22.08,4.92,4.92,0,0,0,4.6,3.42A9.87,9.87,0,0,1,0,19.54a13.94,13.94,0,0,0,7.55,2.21,13.9,13.9,0,0,0,14-13.73c0-.21,0-.42,0-.63A10,10,0,0,0,24,4.59Z"/></svg>
+            <a href="#" aria-label="Twitter" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#d4a017'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
             </a>
             {/* Instagram */}
-            <a href="#" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#000'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
+            <a href="#" aria-label="Instagram" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#d4a017'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
               <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12,2.16c3.2,0,3.58,0,4.85.07,3.25.15,4.77,1.69,4.92,4.92.06,1.27.07,1.65.07,4.85s0,3.58-.07,4.85c-.15,3.23-1.66,4.77-4.92,4.92-1.27.06-1.65.07-4.85.07s-3.58,0-4.85-.07c-3.26-.15-4.77-1.7-4.92-4.92-.06-1.27-.07-1.65-.07-4.85s0-3.58.07-4.85C2.38,3.92,3.9,2.38,7.15,2.23,8.42,2.17,8.8,2.16,12,2.16ZM12,0C8.74,0,8.33,0,7.05.07c-4.27.2-6.78,2.71-7,7C0,8.33,0,8.74,0,12s0,3.67.07,4.95c.2,4.27,2.71,6.78,7,7,1.28.07,1.69.07,4.95.07s3.67,0,4.95-.07c4.27-.2,6.78-2.71,7-7,.07-1.28.07-1.69.07-4.95s0-3.67-.07-4.95c-.2-4.27-2.71-6.78-7-7C15.67,0,15.26,0,12,0Zm0,5.84A6.16,6.16,0,1,0,18.16,12,6.16,6.16,0,0,0,12,5.84Zm0,10.16A4,4,0,1,1,16,12,4,4,0,0,1,12,16Zm7.84-11a1.44,1.44,0,1,0-1.44,1.44A1.44,1.44,0,0,0,19.84,5.04Z"/></svg>
             </a>
             {/* YouTube */}
-            <a href="#" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#000'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
-              <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M23.5,6.19a3,3,0,0,0-2.12-2.12C19.54,3.5,12,3.5,12,3.5s-7.54,0-9.38.57A3,3,0,0,0,.5,6.19,31.16,31.16,0,0,0,0,12a31.16,31.16,0,0,0,.5,5.81,3,3,0,0,0,2.12,2.12C4.46,20.5,12,20.5,12,20.5s7.54,0-9.38-.57a3,3,0,0,0,2.12-2.12A31.16,31.16,0,0,0,24,12,31.16,31.16,0,0,0,23.5,6.19ZM9.75,15.5V8.5L15.5,12Z"/></svg>
+            <a href="#" aria-label="YouTube" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#d4a017'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
             </a>
             <span style={{ fontSize: 10, color: '#6b7280', fontFamily: 'var(--font-sans)' }}>© 2024 CastWise. Fish Smarter.</span>
           </div>
@@ -665,8 +760,8 @@ const finishPriorities = () => {
     );
   }
 
-  // ── QUESTION / INPUT SLIDES ───────────────────────────────────────────────
-  if (!isCompletion) {
+  // ── COMPLETION SLIDE ──────────────────────────────────────────────────────
+  if (isCompletion) {
     return (
       <div style={{
         position: 'fixed', inset: 0, zIndex: 50,
@@ -676,169 +771,52 @@ const finishPriorities = () => {
         overflow: 'hidden',
       }}>
         <MountainBg />
-
-        {/* Progress bar */}
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'rgba(255,255,255,0.08)' }}>
-          <div style={{ height: '100%', width: `${progress}%`, background: '#d4a017', transition: 'width 450ms cubic-bezier(0.4,0,0.2,1)' }} />
-        </div>
-
-        {/* Back button */}
-        {showBack && (
-          <button onClick={handleBack} style={{
-            position: 'absolute', top: 24, left: 24,
-            background: 'none', border: 'none', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 6,
-            fontFamily: 'var(--font-mono)', fontSize: 10,
-            letterSpacing: '0.2em', textTransform: 'uppercase',
-            color: 'rgba(240,237,228,0.45)', transition: 'color 150ms',
-          }}
-            onMouseEnter={e => e.currentTarget.style.color = 'rgba(240,237,228,0.9)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'rgba(240,237,228,0.45)'}
-          >
-            <ChevronLeft size={13} /> Back
-          </button>
-        )}
-
         <div style={{
           position: 'relative', zIndex: 2,
-          width: '100%', maxWidth: 600,
-          padding: '0 28px',
-          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', textAlign: 'center', padding: '0 28px',
         }}>
-          {/* Step label */}
           <div style={{
-            fontFamily: 'var(--font-mono)', fontSize: 10,
-            letterSpacing: '0.22em', textTransform: 'uppercase',
-            color: '#d4a017', marginBottom: 16, textAlign: 'center',
+            width: 80, height: 80, borderRadius: '50%',
+            background: 'rgba(90,173,102,0.15)', border: '1.5px solid #5aad66',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            marginBottom: 24,
           }}>
-            Step {currentStep} of {SLIDES.length - 2}
+            <Check size={36} style={{ color: '#5aad66' }} />
           </div>
-
-          {/* Question */}
           <h2 style={{
             fontFamily: 'var(--font-display)',
-            fontSize: 'clamp(28px, 4vw, 40px)',
-            fontWeight: 700, color: '#f0ede4',
-            textAlign: 'center', lineHeight: 1.15,
-            letterSpacing: '-0.02em', marginBottom: 36,
+            fontSize: 'clamp(30px, 4vw, 44px)', fontWeight: 700,
+            color: '#f0ede4', letterSpacing: '-0.02em', marginBottom: 12,
           }}>
-            {slide.heading}
+            You're all set, {answers.name}!
           </h2>
-
-          {/* Name input */}
-          {slide.type === 'input' && (
-            <>
-              <input
-                ref={inputRef}
-                type="text"
-                value={answers.name}
-                onChange={e => setAnswers({ ...answers, name: e.target.value })}
-                placeholder={slide.placeholder}
-                style={{
-                  width: '100%', background: 'transparent',
-                  border: 'none', borderBottom: '1.5px solid #d4a017',
-                  color: '#f0ede4', fontFamily: 'var(--font-display)',
-                  fontSize: 'clamp(24px, 3vw, 32px)', fontWeight: 600,
-                  textAlign: 'center', padding: '10px 0',
-                  outline: 'none', marginBottom: 36,
-                }}
-              />
-              <button
-                disabled={!answers.name.trim()}
-                onClick={handleNext}
-                style={{
-                  padding: '12px 36px',
-                  border: '1px solid rgba(240,237,228,0.3)', borderRadius: 6,
-                  background: 'transparent', color: '#f0ede4',
-                  fontFamily: 'var(--font-sans)', fontSize: 13,
-                  fontWeight: 600, letterSpacing: '0.08em',
-                  textTransform: 'uppercase', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  opacity: answers.name.trim() ? 1 : 0.4,
-                  transition: 'border-color 180ms, opacity 180ms',
-                }}
-                onMouseEnter={e => { if (answers.name.trim()) e.currentTarget.style.borderColor = '#d4a017'; }}
-                onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(240,237,228,0.3)'}
-              >
-                Continue <ChevronRight size={15} />
-              </button>
-            </>
-          )}
-
-          {/* Choice / multi */}
-          {(slide.type === 'choice' || slide.type === 'multi') && (
-            <>
-              <div style={{
-                width: '100%',
-                display: isGrid ? 'grid' : 'flex',
-                gridTemplateColumns: isGrid ? '1fr 1fr' : undefined,
-                flexDirection: isGrid ? undefined : 'column',
-                gap: 10,
-              }}>
-                {slide.options.map(opt => {
-                  const sel = slide.type === 'multi'
-                    ? (answers[slide.id] || []).includes(opt)
-                    : answers[slide.id] === opt;
-                  return (
-                    <button key={opt} onClick={() => handleSelect(opt)} style={{
-                      display: 'flex', alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '17px 22px', borderRadius: 10,
-                      border: sel ? '1.5px solid #d4a017' : '1.5px solid rgba(255,255,255,0.12)',
-                      background: sel ? '#d4a017' : 'rgba(255,255,255,0.05)',
-                      color: sel ? '#0d1a10' : '#f0ede4',
-                      fontFamily: 'var(--font-sans)', fontSize: 15,
-                      fontWeight: sel ? 700 : 500, cursor: 'pointer',
-                      textAlign: 'left', transition: 'all 180ms',
-                    }}
-                      onMouseEnter={e => { if (!sel) e.currentTarget.style.borderColor = 'rgba(212,160,23,0.5)'; }}
-                      onMouseLeave={e => { if (!sel) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
-                    >
-                      <span>{opt}</span>
-                      <span style={{
-                        width: 22, height: 22, borderRadius: '50%',
-                        border: sel ? 'none' : '1.5px solid rgba(255,255,255,0.25)',
-                        background: sel ? '#0d1a10' : 'transparent',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0,
-                      }}>
-                        {sel && <Check size={12} style={{ color: '#d4a017' }} />}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              {slide.type === 'multi' && (
-                <div style={{ marginTop: 24 }}>
-                  <button
-                    disabled={!(answers[slide.id] || []).length}
-                    onClick={handleNext}
-                    style={{
-                      padding: '12px 36px',
-                      border: '1px solid rgba(240,237,228,0.3)', borderRadius: 6,
-                      background: 'transparent', color: '#f0ede4',
-                      fontFamily: 'var(--font-sans)', fontSize: 13,
-                      fontWeight: 600, letterSpacing: '0.08em',
-                      textTransform: 'uppercase', cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      opacity: (answers[slide.id] || []).length ? 1 : 0.4,
-                      transition: 'border-color 180ms, opacity 180ms',
-                    }}
-                    onMouseEnter={e => { if ((answers[slide.id] || []).length) e.currentTarget.style.borderColor = '#d4a017'; }}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(240,237,228,0.3)'}
-                  >
-                    Continue <ChevronRight size={15} />
-                  </button>
-                </div>
-              )}
-            </>
-          )}
+          <p style={{
+            fontFamily: 'var(--font-display)', fontStyle: 'italic',
+            fontSize: 16, color: 'rgba(240,237,228,0.6)', marginBottom: 36,
+          }}>
+            Your personalized dashboard is ready.
+          </p>
+          <button onClick={handleNext} style={{
+            padding: '15px 48px', borderRadius: 99,
+            background: '#d4a017', color: '#0d1a10',
+            fontFamily: 'var(--font-sans)', fontSize: 15,
+            fontWeight: 700, border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 10,
+            boxShadow: '0 4px 24px rgba(212,160,23,0.35)',
+            transition: 'transform 160ms',
+          }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+          >
+            Go to my dashboard <ChevronRight size={17} />
+          </button>
         </div>
       </div>
     );
   }
 
-  // ── COMPLETION SLIDE ──────────────────────────────────────────────────────
+  // ── QUESTION / INPUT SLIDES ───────────────────────────────────────────────
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 50,
@@ -848,46 +826,163 @@ const finishPriorities = () => {
       overflow: 'hidden',
     }}>
       <MountainBg />
+
+      {/* Progress bar */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'rgba(255,255,255,0.08)' }}>
+        <div style={{ height: '100%', width: `${progress}%`, background: '#d4a017', transition: 'width 450ms cubic-bezier(0.4,0,0.2,1)' }} />
+      </div>
+
+      {/* Back button */}
+      {showBack && (
+        <button onClick={handleBack} style={{
+          position: 'absolute', top: 24, left: 24,
+          background: 'none', border: 'none', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 6,
+          fontFamily: 'var(--font-mono)', fontSize: 10,
+          letterSpacing: '0.2em', textTransform: 'uppercase',
+          color: 'rgba(240,237,228,0.45)', transition: 'color 150ms',
+        }}
+          onMouseEnter={e => e.currentTarget.style.color = 'rgba(240,237,228,0.9)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'rgba(240,237,228,0.45)'}
+        >
+          <ChevronLeft size={13} /> Back
+        </button>
+      )}
+
       <div style={{
         position: 'relative', zIndex: 2,
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', textAlign: 'center', padding: '0 28px',
+        width: '100%', maxWidth: 600,
+        padding: '0 28px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
       }}>
+        {/* Step label */}
         <div style={{
-          width: 80, height: 80, borderRadius: '50%',
-          background: 'rgba(90,173,102,0.15)', border: '1.5px solid #5aad66',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          marginBottom: 24,
+          fontFamily: 'var(--font-mono)', fontSize: 10,
+          letterSpacing: '0.22em', textTransform: 'uppercase',
+          color: '#d4a017', marginBottom: 16, textAlign: 'center',
         }}>
-          <Check size={36} style={{ color: '#5aad66' }} />
+          Step {currentStep} of {SLIDES.length - 2}
         </div>
+
+        {/* Question */}
         <h2 style={{
           fontFamily: 'var(--font-display)',
-          fontSize: 'clamp(30px, 4vw, 44px)', fontWeight: 700,
-          color: '#f0ede4', letterSpacing: '-0.02em', marginBottom: 12,
+          fontSize: 'clamp(28px, 4vw, 40px)',
+          fontWeight: 700, color: '#f0ede4',
+          textAlign: 'center', lineHeight: 1.15,
+          letterSpacing: '-0.02em', marginBottom: 36,
         }}>
-          You're all set, {answers.name}!
+          {slide.heading}
         </h2>
-        <p style={{
-          fontFamily: 'var(--font-display)', fontStyle: 'italic',
-          fontSize: 16, color: 'rgba(240,237,228,0.6)', marginBottom: 36,
-        }}>
-          Your personalized dashboard is ready.
-        </p>
-        <button onClick={handleNext} style={{
-          padding: '15px 48px', borderRadius: 99,
-          background: '#d4a017', color: '#0d1a10',
-          fontFamily: 'var(--font-sans)', fontSize: 15,
-          fontWeight: 700, border: 'none', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: 10,
-          boxShadow: '0 4px 24px rgba(212,160,23,0.35)',
-          transition: 'transform 160ms',
-        }}
-          onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-          onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-        >
-          Go to my dashboard <ChevronRight size={17} />
-        </button>
+
+        {/* Name input */}
+        {slide.type === 'input' && (
+          <>
+            <input
+              ref={inputRef}
+              type="text"
+              value={answers.name}
+              onChange={e => setAnswers({ ...answers, name: e.target.value })}
+              placeholder={slide.placeholder}
+              style={{
+                width: '100%', background: 'transparent',
+                border: 'none', borderBottom: '1.5px solid #d4a017',
+                color: '#f0ede4', fontFamily: 'var(--font-display)',
+                fontSize: 'clamp(24px, 3vw, 32px)', fontWeight: 600,
+                textAlign: 'center', padding: '10px 0',
+                outline: 'none', marginBottom: 36,
+              }}
+            />
+            <button
+              disabled={!answers.name.trim()}
+              onClick={handleNext}
+              style={{
+                padding: '12px 36px',
+                border: '1px solid rgba(240,237,228,0.3)', borderRadius: 6,
+                background: 'transparent', color: '#f0ede4',
+                fontFamily: 'var(--font-sans)', fontSize: 13,
+                fontWeight: 600, letterSpacing: '0.08em',
+                textTransform: 'uppercase', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 8,
+                opacity: answers.name.trim() ? 1 : 0.4,
+                transition: 'border-color 180ms, opacity 180ms',
+              }}
+              onMouseEnter={e => { if (answers.name.trim()) e.currentTarget.style.borderColor = '#d4a017'; }}
+              onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(240,237,228,0.3)'}
+            >
+              Continue <ChevronRight size={15} />
+            </button>
+          </>
+        )}
+
+        {/* Choice / multi */}
+        {(slide.type === 'choice' || slide.type === 'multi') && (
+          <>
+            <div style={{
+              width: '100%',
+              display: isGrid ? 'grid' : 'flex',
+              gridTemplateColumns: isGrid ? '1fr 1fr' : undefined,
+              flexDirection: isGrid ? undefined : 'column',
+              gap: 10,
+            }}>
+              {slide.options.map(opt => {
+                const sel = slide.type === 'multi'
+                  ? (answers[slide.id] || []).includes(opt)
+                  : answers[slide.id] === opt;
+                return (
+                  <button key={opt} onClick={() => handleSelect(opt)} style={{
+                    display: 'flex', alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '17px 22px', borderRadius: 10,
+                    border: sel ? '1.5px solid #d4a017' : '1.5px solid rgba(255,255,255,0.12)',
+                    background: sel ? '#d4a017' : 'rgba(255,255,255,0.05)',
+                    color: sel ? '#0d1a10' : '#f0ede4',
+                    fontFamily: 'var(--font-sans)', fontSize: 15,
+                    fontWeight: sel ? 700 : 500, cursor: 'pointer',
+                    textAlign: 'left', transition: 'all 180ms',
+                  }}
+                    onMouseEnter={e => { if (!sel) e.currentTarget.style.borderColor = 'rgba(212,160,23,0.5)'; }}
+                    onMouseLeave={e => { if (!sel) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
+                  >
+                    <span>{opt}</span>
+                    <span style={{
+                      width: 22, height: 22, borderRadius: '50%',
+                      border: sel ? 'none' : '1.5px solid rgba(255,255,255,0.25)',
+                      background: sel ? '#0d1a10' : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      {sel && <Check size={12} style={{ color: '#d4a017' }} />}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {slide.type === 'multi' && (
+              <div style={{ marginTop: 24 }}>
+                <button
+                  disabled={!(answers[slide.id] || []).length}
+                  onClick={handleNext}
+                  style={{
+                    padding: '12px 36px',
+                    border: '1px solid rgba(240,237,228,0.3)', borderRadius: 6,
+                    background: 'transparent', color: '#f0ede4',
+                    fontFamily: 'var(--font-sans)', fontSize: 13,
+                    fontWeight: 600, letterSpacing: '0.08em',
+                    textTransform: 'uppercase', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    opacity: (answers[slide.id] || []).length ? 1 : 0.4,
+                    transition: 'border-color 180ms, opacity 180ms',
+                  }}
+                  onMouseEnter={e => { if ((answers[slide.id] || []).length) e.currentTarget.style.borderColor = '#d4a017'; }}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(240,237,228,0.3)'}
+                >
+                  Continue <ChevronRight size={15} />
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
