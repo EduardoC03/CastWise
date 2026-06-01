@@ -6,7 +6,7 @@ const SLIDES = [
   { id: 'name',       type: 'input',  heading: 'First, what should we call you?', placeholder: 'Your first name' },
   { id: 'experience', type: 'choice', heading: 'How would you describe your fishing experience?', options: ['Beginner', 'Intermediate', 'Advanced'] },
   { id: 'frequency',  type: 'choice', heading: 'How often do you fish?', options: ['A few times a year', 'Monthly', 'Weekly', 'Almost daily'] },
-  { id: 'gear',       type: 'multi',  heading: 'What gear do you own?', options: ['Spinning rod', 'Fly rod', 'Bait rod', 'Waders', 'Boat', 'Electronics', 'None'] },
+  { id: 'gear',       type: 'multi',  heading: 'What gear do you own?', options: ['Spinning rod', 'Fly rod', 'Bait rod', 'Waders', 'Boat', 'Electronics'] },
   { id: 'styles',     type: 'multi',  heading: 'What fishing styles do you prefer?', options: ['Spin fishing', 'Fly fishing', 'Bait fishing', 'Trolling', 'Ice fishing'] },
   { id: 'region',     type: 'choice', heading: 'Where in Washington are you based?', options: ['Northwest WA', 'Southwest WA', 'Central WA', 'Eastern WA'] },
   { id: 'travel',     type: 'choice', heading: 'How far are you willing to travel to fish?', options: ['Local only (under 30 min)', 'Up to 1 hour', 'Up to 2 hours', 'Anywhere in WA'] },
@@ -16,6 +16,7 @@ const SLIDES = [
 
 // Background image from src/assets
 import welcomeBg from '../assets/welcome-bg.jpg';
+import fishLogo from '../assets/fish_logo_transparent.png';
 const WELCOME_PHOTO = welcomeBg;
 
 // ── Mountain silhouette SVG for question slides ───────────────────────────────
@@ -48,8 +49,6 @@ export default function Onboarding({ onComplete }) {
     name: '', experience: '', frequency: '', gear: [],
     styles: [], region: '', travel: '', access: '',
   });
-  const [showPriorities, setShowPriorities] = useState(false);
-  const [priorities, setPriorities] = useState([]);
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -58,42 +57,13 @@ export default function Onboarding({ onComplete }) {
     }
   }, [currentStep]);
 
-  const QUESTION_SLIDES = SLIDES.filter(s => s.type !== 'welcome' && s.type !== 'completion');
-  const PRIORITY_OPTIONS = [
-    { v: 'experience', label: 'Experience level',   sub: 'Matching spots to your skill' },
-    { v: 'frequency',  label: 'How often you fish',  sub: 'Based on your fishing schedule' },
-    { v: 'gear',       label: 'Gear you own',        sub: 'Access based on your equipment' },
-    { v: 'styles',     label: 'Fishing styles',      sub: 'Your preferred techniques' },
-    { v: 'region',     label: 'Your region',         sub: 'Spots near where you live' },
-    { v: 'travel',     label: 'Travel distance',     sub: 'How far you\'ll go' },
-    { v: 'access',     label: 'Water access type',   sub: 'Bank, wade, or boat' },
-  ];
-
   const handleNext = () => {
-    const lastQuestionIndex = SLIDES.findIndex(s => s.id === 'access');
-    if (currentStep === lastQuestionIndex) {
-      setTimeout(() => setShowPriorities(true), 280);
-      return;
-    }
     if (currentStep === SLIDES.length - 1) {
-      onComplete({ ...answers, priorities, completedAt: new Date().toISOString() });
+      onComplete({ ...answers, completedAt: new Date().toISOString() });
       return;
     }
     const advance = () => setCurrentStep(p => p + 1);
     SLIDES[currentStep].type === 'choice' ? setTimeout(advance, 280) : advance();
-  };
-
-  const handlePrioritySelect = (v) => {
-    if (priorities.includes(v)) {
-      setPriorities(priorities.filter(x => x !== v));
-    } else if (priorities.length < 3) {
-      setPriorities([...priorities, v]);
-    }
-  };
-
-  const finishPriorities = () => {
-    setShowPriorities(false);
-    setCurrentStep(SLIDES.findIndex(s => s.id === 'completion'));
   };
 
   const handleBack = () => currentStep > 0 && setCurrentStep(p => p - 1);
@@ -101,18 +71,8 @@ export default function Onboarding({ onComplete }) {
   const handleSelect = (val) => {
     const slide = SLIDES[currentStep];
     if (slide.type === 'multi') {
-      if (slide.id === 'gear') {
-        if (val === 'None') {
-          const cur = answers.gear || [];
-          setAnswers({ ...answers, gear: cur.includes('None') ? [] : ['None'] });
-        } else {
-          const cur = (answers.gear || []).filter(x => x !== 'None');
-          setAnswers({ ...answers, gear: cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val] });
-        }
-      } else {
-        const cur = answers[slide.id] || [];
-        setAnswers({ ...answers, [slide.id]: cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val] });
-      }
+      const cur = answers[slide.id] || [];
+      setAnswers({ ...answers, [slide.id]: cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val] });
     } else {
       setAnswers({ ...answers, [slide.id]: val });
       handleNext();
@@ -129,125 +89,13 @@ export default function Onboarding({ onComplete }) {
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== 'Enter') return;
-      if (showPriorities) {
-        if (priorities.length === 3) finishPriorities();
-        return;
-      }
       if (slide.type === 'input'   && answers.name.trim())               handleNext();
       if (slide.type === 'multi'   && (answers[slide.id] || []).length)  handleNext();
       if (slide.type === 'welcome' || slide.type === 'completion')       handleNext();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [currentStep, answers, showPriorities, priorities]);
-
-  // ── PRIORITIES SLIDE ─────────────────────────────────────────────────────
-  if (showPriorities) {
-    return (
-      <div style={{
-        position: 'fixed', inset: 0, zIndex: 50,
-        background: '#0d1a10',
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        overflow: 'hidden',
-      }}>
-        <MountainBg />
-        <div style={{
-          position: 'relative', zIndex: 2,
-          width: '100%', maxWidth: 560,
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', padding: '0 28px',
-        }}>
-          <h2 style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700,
-            color: '#f0ede4', letterSpacing: '-0.02em',
-            textAlign: 'center', marginBottom: 10,
-          }}>
-            What matters most to you?
-          </h2>
-          <p style={{
-            fontFamily: 'var(--font-sans)', fontSize: 14,
-            color: 'rgba(240,237,228,0.55)', marginBottom: 28, textAlign: 'center',
-          }}>
-            Pick your top 3 priorities ({priorities.length} / 3 selected)
-          </p>
-
-          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {PRIORITY_OPTIONS.map(opt => {
-              const sel      = priorities.includes(opt.v);
-              const disabled = !sel && priorities.length >= 3;
-              return (
-                <button
-                  key={opt.v}
-                  disabled={disabled}
-                  onClick={() => handlePrioritySelect(opt.v)}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '15px 20px', borderRadius: 10,
-                    border: sel ? '1.5px solid #d4a017' : '1.5px solid rgba(255,255,255,0.12)',
-                    background: sel ? '#d4a017' : 'rgba(255,255,255,0.05)',
-                    color: sel ? '#0d1a10' : disabled ? 'rgba(240,237,228,0.3)' : '#f0ede4',
-                    fontFamily: 'var(--font-sans)', fontSize: 14,
-                    fontWeight: sel ? 700 : 500, cursor: disabled ? 'not-allowed' : 'pointer',
-                    textAlign: 'left', transition: 'all 180ms',
-                  }}
-                >
-                  <div>
-                    <div>{opt.label}</div>
-                    <div style={{ fontSize: 11, opacity: 0.65, marginTop: 2 }}>{opt.sub}</div>
-                  </div>
-                  <span style={{
-                    width: 24, height: 24, borderRadius: '50%',
-                    border: sel ? 'none' : '1.5px solid rgba(255,255,255,0.25)',
-                    background: sel ? '#0d1a10' : 'transparent',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0, fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700,
-                    color: '#d4a017',
-                  }}>
-                    {sel ? priorities.indexOf(opt.v) + 1 : ''}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
-            <button
-              onClick={() => setShowPriorities(false)}
-              style={{
-                padding: '12px 28px', borderRadius: 6,
-                border: '1px solid rgba(240,237,228,0.3)', background: 'transparent',
-                color: '#f0ede4', fontFamily: 'var(--font-sans)', fontSize: 13,
-                fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-              }}
-            >
-              <ChevronLeft size={15} /> Back
-            </button>
-            <button
-              disabled={priorities.length < 3}
-              onClick={finishPriorities}
-              style={{
-                padding: '12px 36px', borderRadius: 6,
-                border: '1px solid rgba(240,237,228,0.3)', background: 'transparent',
-                color: '#f0ede4', fontFamily: 'var(--font-sans)', fontSize: 13,
-                fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
-                cursor: priorities.length < 3 ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', gap: 8,
-                opacity: priorities.length < 3 ? 0.4 : 1,
-                transition: 'border-color 180ms, opacity 180ms',
-              }}
-              onMouseEnter={e => { if (priorities.length >= 3) e.currentTarget.style.borderColor = '#d4a017'; }}
-              onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(240,237,228,0.3)'}
-            >
-              Finish <ChevronRight size={15} />
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  }, [currentStep, answers]);
 
   // ── WELCOME SLIDE ─────────────────────────────────────────────────────────
   if (isWelcome) {
@@ -255,19 +103,45 @@ export default function Onboarding({ onComplete }) {
       <div style={{
         position: 'fixed', inset: 0, zIndex: 50,
         display: 'flex', flexDirection: 'column',
-        overflow: 'hidden',
-        backgroundImage: `linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.2)), url(${WELCOME_PHOTO})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
+        overflowY: 'auto',
+        background: '#0a1a0e', // fallback while image loads
       }}>
+
+        {/* Background Image - Fixed position to anchor during scrolling */}
+        <img
+          src={WELCOME_PHOTO}
+          alt=""
+          aria-hidden="true"
+          style={{
+            position: 'fixed', inset: 0,
+            width: '100%', height: '100%',
+            objectFit: 'cover',
+            objectPosition: 'center center',
+            imageRendering: 'high-quality',
+            filter: 'contrast(1.06) saturate(1.08)',
+            willChange: 'transform',
+            transform: 'translateZ(0)',
+            zIndex: -2,
+          }}
+        />
+
+        {/* Dark overlay */}
+        <div style={{
+          position: 'fixed', inset: 0,
+          background: 'linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.45))',
+          backdropFilter: 'blur(0.8px)',
+          WebkitBackdropFilter: 'blur(0.8px)',
+          pointerEvents: 'none',
+          zIndex: -1,
+        }} />
 
         {/* Mist overlay on water */}
         <div style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0,
+          position: 'fixed', bottom: 0, left: 0, right: 0,
           height: '30%',
           background: 'linear-gradient(to top, rgba(255,255,255,0.15), transparent)',
           pointerEvents: 'none',
+          zIndex: -1,
         }} />
 
         {/* ── Navbar ── */}
@@ -276,16 +150,12 @@ export default function Onboarding({ onComplete }) {
           display: 'flex', alignItems: 'center',
           justifyContent: 'space-between',
           padding: '24px 32px',
+          width: '100%',
+          boxSizing: 'border-box',
         }}>
-          {/* Logo */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: '50%',
-              border: '1px solid #d4a017',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <span style={{ color: '#d4a017', fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 500 }}>CW</span>
-            </div>
+          {/* Transparent Fish Logo Branding */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <img src={fishLogo} alt="CastWise Logo" style={{ width: 32, height: 32, objectFit: 'contain' }} />
             <span style={{
               fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700,
               color: '#ffffff', letterSpacing: '-0.02em',
@@ -303,8 +173,8 @@ export default function Onboarding({ onComplete }) {
                   fontFamily: 'var(--font-sans)', letterSpacing: '0.04em',
                   textDecoration: 'none', transition: 'color 200ms',
                 }}
-                  onMouseEnter={e => e.currentTarget.style.color = '#d4a017'}
-                  onMouseLeave={e => e.currentTarget.style.color = '#ffffff'}
+                  onMouseEnter={e => e.target.style.color = '#d4a017'}
+                  onMouseLeave={e => e.target.style.color = '#ffffff'}
                 >
                   {l}
                 </a>
@@ -316,36 +186,38 @@ export default function Onboarding({ onComplete }) {
           <div style={{ width: 128 }} />
         </nav>
 
-        {/* ── Hero content ── */}
+        {/* ── Hero & Content Section ── */}
         <section style={{
-          flex: 1,
           display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
           textAlign: 'center',
-          padding: '0 16px',
+          padding: '40px 24px 80px 24px',
           position: 'relative', zIndex: 10,
+          width: '100%',
+          boxSizing: 'border-box',
         }}>
-          {/* Circle icon */}
-          <div style={{
-            width: 96, height: 96, borderRadius: '50%',
-            border: '2px solid #d4a017',
-            background: 'rgba(0,0,0,0.1)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            marginBottom: 32,
-          }}>
-            <FishIcon size={48} color="#d4a017" />
-          </div>
+          {/* Restored Clean Transparent Fish Logo */}
+          <img
+            src={fishLogo}
+            alt="CastWise Fish Logo"
+            style={{
+              width: 96,
+              height: 96,
+              objectFit: 'contain',
+              marginBottom: 20,
+              filter: 'drop-shadow(0 4px 12px rgba(212,160,23,0.4))',
+            }}
+          />
 
           {/* Wordmark */}
           <h1 style={{
             fontFamily: 'var(--font-display)',
-            fontSize: 'clamp(64px, 10vw, 96px)',
+            fontSize: 'clamp(54px, 8vw, 84px)',
             fontWeight: 700,
             color: '#ffffff',
             letterSpacing: '-0.03em',
             lineHeight: 1,
-            marginBottom: 8,
+            marginBottom: 12,
             filter: 'drop-shadow(0 1px 2px rgba(255,255,255,0.3))',
           }}>
             Cast<em style={{ fontStyle: 'italic', color: '#d4a017' }}>Wise</em>
@@ -353,15 +225,62 @@ export default function Onboarding({ onComplete }) {
 
           {/* Tagline */}
           <p style={{
-            fontSize: 'clamp(16px, 2.5vw, 22px)',
+            fontSize: 'clamp(16px, 2.2vw, 20px)',
             fontWeight: 500,
-            color: '#1e293b',
-            marginBottom: 40,
+            color: 'rgba(255, 255, 255, 0.9)',
+            marginBottom: 24,
             letterSpacing: '-0.01em',
             fontFamily: 'var(--font-sans)',
           }}>
             Fish smarter, not harder.
           </p>
+
+          {/* Features Grid Section (Requested Prior to Action CTA) */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: '20px',
+            width: '100%',
+            maxWidth: '1000px',
+            margin: '40px 0',
+            padding: '0 16px',
+            boxSizing: 'border-box',
+          }}>
+            {[
+              { title: 'Interactive Map', desc: 'Explore premium fishing locations across Washington with up-to-date conditions.' },
+              { title: 'Personalized Picks', desc: 'Unlock recommendations custom-tailored to your exact gear and preferences.' },
+              { title: 'Species Intel', desc: 'Identify local targets and discover verified presentation tactics.' },
+              { title: 'Trip Briefing', desc: 'Get localized weather, safety reports, and regulation checkers instantly.' }
+            ].map((feat, idx) => (
+              <div key={idx} style={{
+                background: 'rgba(13, 26, 16, 0.65)',
+                border: '1px solid rgba(212, 160, 23, 0.25)',
+                borderRadius: '12px',
+                padding: '24px',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                textAlign: 'left',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+                transition: 'transform 200ms, border-color 200ms',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.transform = 'translateY(-4px)';
+                e.currentTarget.style.borderColor = '#d4a017';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.borderColor = 'rgba(212, 160, 23, 0.25)';
+              }}
+              >
+                <h3 style={{ fontFamily: 'var(--font-display)', color: '#d4a017', fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>
+                  {feat.title}
+                </h3>
+                <p style={{ fontFamily: 'var(--font-sans)', color: '#e2e8f0', fontSize: '13px', lineHeight: '1.5', margin: 0 }}>
+                  {feat.desc}
+                </p>
+              </div>
+            ))}
+          </div>
 
           {/* CTA */}
           <button
@@ -376,8 +295,9 @@ export default function Onboarding({ onComplete }) {
               borderRadius: 99,
               border: 'none',
               cursor: 'pointer',
-              boxShadow: '0 10px 40px rgba(0,0,0,0.25)',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.35)',
               transition: 'transform 160ms, background 160ms',
+              marginTop: '12px',
             }}
             onMouseEnter={e => { e.currentTarget.style.background = '#c49010'; e.currentTarget.style.transform = 'scale(1.05)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = '#d4a017'; e.currentTarget.style.transform = 'scale(1)'; }}
@@ -394,18 +314,20 @@ export default function Onboarding({ onComplete }) {
           width: '100%', padding: '24px 32px',
           display: 'flex', flexDirection: 'column',
           alignItems: 'center', gap: 12,
+          marginTop: 'auto',
+          boxSizing: 'border-box',
         }}>
           {/* Footer nav */}
           <div style={{ display: 'flex', gap: 24 }}>
             {['Map', 'Picks', 'Species', 'Trip Briefing'].map(l => (
               <a key={l} href="#" style={{
-                color: '#374151', fontSize: 10, fontWeight: 600,
+                color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: 600,
                 fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
                 letterSpacing: '0.12em', textDecoration: 'none',
                 transition: 'color 160ms',
               }}
-                onMouseEnter={e => e.currentTarget.style.color = '#000'}
-                onMouseLeave={e => e.currentTarget.style.color = '#374151'}
+                onMouseEnter={e => e.target.style.color = '#fff'}
+                onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.4)'}
               >
                 {l}
               </a>
@@ -414,22 +336,22 @@ export default function Onboarding({ onComplete }) {
           {/* Social + copyright */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             {/* Facebook */}
-            <a href="#" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#000'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
+            <a href="#" style={{ color: 'rgba(255,255,255,0.4)' }} onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.4)'}>
               <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M18.77,7.46H14.5v-1.9c0-.9.6-1.1,1-1.1h3V.5h-4.33C10.24.5,9.5,3.44,9.5,5.32v2.14h-3v4h3v12h5v-12h3.85Z"/></svg>
             </a>
             {/* X / Twitter */}
-            <a href="#" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#000'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
+            <a href="#" style={{ color: 'rgba(255,255,255,0.4)' }} onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.4)'}>
               <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M23.95,4.57a10,10,0,0,1-2.82.77,4.96,4.96,0,0,0,2.18-2.72,10.06,10.06,0,0,1-3.12,1.19,4.92,4.92,0,0,0-8.39,4.49A14,14,0,0,1,1.64,3.16,4.92,4.92,0,0,0,3.16,9.72a4.91,4.91,0,0,1-2.22-.61V9.17a4.92,4.92,0,0,0,3.94,4.84,4.91,4.91,0,0,1-2.22.08,4.92,4.92,0,0,0,4.6,3.42A9.87,9.87,0,0,1,0,19.54a13.94,13.94,0,0,0,7.55,2.21,13.9,13.9,0,0,0,14-13.73c0-.21,0-.42,0-.63A10,10,0,0,0,24,4.59Z"/></svg>
             </a>
             {/* Instagram */}
-            <a href="#" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#000'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
+            <a href="#" style={{ color: 'rgba(255,255,255,0.4)' }} onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.4)'}>
               <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12,2.16c3.2,0,3.58,0,4.85.07,3.25.15,4.77,1.69,4.92,4.92.06,1.27.07,1.65.07,4.85s0,3.58-.07,4.85c-.15,3.23-1.66,4.77-4.92,4.92-1.27.06-1.65.07-4.85.07s-3.58,0-4.85-.07c-3.26-.15-4.77-1.7-4.92-4.92-.06-1.27-.07-1.65-.07-4.85s0-3.58.07-4.85C2.38,3.92,3.9,2.38,7.15,2.23,8.42,2.17,8.8,2.16,12,2.16ZM12,0C8.74,0,8.33,0,7.05.07c-4.27.2-6.78,2.71-7,7C0,8.33,0,8.74,0,12s0,3.67.07,4.95c.2,4.27,2.71,6.78,7,7,1.28.07,1.69.07,4.95.07s3.67,0,4.95-.07c4.27-.2,6.78-2.71,7-7,.07-1.28.07-1.69.07-4.95s0-3.67-.07-4.95c-.2-4.27-2.71-6.78-7-7C15.67,0,15.26,0,12,0Zm0,5.84A6.16,6.16,0,1,0,18.16,12,6.16,6.16,0,0,0,12,5.84Zm0,10.16A4,4,0,1,1,16,12,4,4,0,0,1,12,16Zm7.84-11a1.44,1.44,0,1,0-1.44,1.44A1.44,1.44,0,0,0,19.84,5.04Z"/></svg>
             </a>
             {/* YouTube */}
-            <a href="#" style={{ color: '#374151' }} onMouseEnter={e => e.currentTarget.style.color = '#000'} onMouseLeave={e => e.currentTarget.style.color = '#374151'}>
+            <a href="#" style={{ color: 'rgba(255,255,255,0.4)' }} onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.4)'}>
               <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M23.5,6.19a3,3,0,0,0-2.12-2.12C19.54,3.5,12,3.5,12,3.5s-7.54,0-9.38.57A3,3,0,0,0,.5,6.19,31.16,31.16,0,0,0,0,12a31.16,31.16,0,0,0,.5,5.81,3,3,0,0,0,2.12,2.12C4.46,20.5,12,20.5,12,20.5s7.54,0,9.38-.57a3,3,0,0,0,2.12-2.12A31.16,31.16,0,0,0,24,12,31.16,31.16,0,0,0,23.5,6.19ZM9.75,15.5V8.5L15.5,12Z"/></svg>
             </a>
-            <span style={{ fontSize: 10, color: '#6b7280', fontFamily: 'var(--font-sans)' }}>© 2024 CastWise. Fish Smarter.</span>
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--font-sans)' }}>© 2024 CastWise. Fish Smarter.</span>
           </div>
         </footer>
       </div>
@@ -482,7 +404,7 @@ export default function Onboarding({ onComplete }) {
             letterSpacing: '0.22em', textTransform: 'uppercase',
             color: '#d4a017', marginBottom: 16, textAlign: 'center',
           }}>
-            Step {currentStep} of {QUESTION_SLIDES.length}
+            Step {currentStep - 1} of 7
           </div>
 
           {/* Question */}
