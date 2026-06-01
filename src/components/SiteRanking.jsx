@@ -4,7 +4,6 @@ import {
   BookOpen, Plus, Check, Trophy, Compass, ChevronRight
 } from 'lucide-react';
 import { SITES } from '../data/sites';
-import useWikiPhoto from '../utils/useWikiPhoto';
 
 // ── Scoring ───────────────────────────────────────────────────────────────────
 function scoreSite(site, profile) {
@@ -123,7 +122,7 @@ export default function SiteRanking({ profile, trip, onSelect, onAddToTrip }) {
           </div>
           <ExploreCard
             result={explore}
-              inTrip={trip?.site?.id === explore.site.id}
+            inTrip={trip?.site?.id === explore.site.id}
             onSelect={onSelect}
             onAddToTrip={onAddToTrip}
           />
@@ -146,13 +145,11 @@ export default function SiteRanking({ profile, trip, onSelect, onAddToTrip }) {
   );
 }
 
-// ── Ranked card — two column, photo left with score overlay, content right ────
+// ── Ranked card — single panel, score badge in header ─────────────────────────
 function RankedSiteCard({ rank, result, inTrip, onSelect, onAddToTrip }) {
   const { site, score, drivingFeatures } = result;
   const isTop = rank === 1;
   const [hovered, setHovered] = useState(false);
-  const { photoUrl, loading } = useWikiPhoto(site.name);
-  const photo = photoUrl;
 
   return (
     <article
@@ -167,51 +164,19 @@ function RankedSiteCard({ rank, result, inTrip, onSelect, onAddToTrip }) {
         boxShadow: '0 8px 40px rgba(0,0,0,0.3)',
         transition: 'transform 300ms ease',
         transform: hovered ? 'translateY(-4px)' : 'translateY(0)',
-        display: 'grid',
-        gridTemplateColumns: '1.2fr 1fr',
+        padding: '36px 48px',
       }}
     >
-      {/* ── Photo panel ── */}
-      <div style={{ position: 'relative', minHeight: 400, overflow: 'hidden' }}>
-        {/* Loading shimmer */}
-        {loading && (
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%)',
-            backgroundSize: '200% 100%',
-            animation: 'shimmer 1.4s infinite',
-          }} />
-        )}
-        {/* Real Wikipedia photo or dark fallback */}
-        {photo ? (
-          <img
-            src={photo}
-            alt={site.name}
-            style={{
-              position: 'absolute', inset: 0,
-              width: '100%', height: '100%',
-              objectFit: 'cover',
-              filter: 'brightness(0.75)',
-              transition: 'transform 700ms cubic-bezier(0.165,0.84,0.44,1)',
-              transform: hovered ? 'scale(1.05)' : 'scale(1)',
-            }}
-          />
-        ) : !loading && (
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'linear-gradient(135deg, #0d1a10 0%, #1a2e1f 50%, #0a1a0d 100%)',
-          }} />
-        )}
-        {/* Right-to-left gradient so photo fades into content panel */}
+      {/* ── Header: score + rank + meta ── */}
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', gap: 24,
+        marginBottom: 24,
+        paddingBottom: 24,
+        borderBottom: '1px solid rgba(212,160,23,0.12)',
+      }}>
+        {/* Score circle */}
         <div style={{
-          position: 'absolute', inset: 0,
-          background: 'linear-gradient(to right, rgba(0,0,0,0.4) 0%, transparent 70%)',
-          pointerEvents: 'none',
-        }} />
-
-        {/* Score circle + rank label */}
-        <div style={{
-          position: 'absolute', top: 28, left: 28,
+          flexShrink: 0,
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
         }}>
           <div style={{
@@ -220,7 +185,7 @@ function RankedSiteCard({ rank, result, inTrip, onSelect, onAddToTrip }) {
             background: 'rgba(10,18,13,0.85)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700,
-            color: isTop ? 'var(--gold)' : '#f0ede4',
+            color: isTop ? 'var(--gold)' : 'var(--text)',
             boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
           }}>
             {score}
@@ -228,143 +193,132 @@ function RankedSiteCard({ rank, result, inTrip, onSelect, onAddToTrip }) {
           <span style={{
             fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
             letterSpacing: '0.3em', textTransform: 'uppercase',
-            color: '#ffffff',
-            background: 'rgba(0,0,0,0.45)',
-            backdropFilter: 'blur(4px)',
-            padding: '3px 8px',
+            color: 'var(--text-3)',
           }}>
             RANK #{rank}
           </span>
         </div>
-      </div>
 
-      {/* ── Content panel ── */}
-      <div style={{
-        padding: '36px 48px',
-        display: 'flex', flexDirection: 'column', justifyContent: 'center',
-      }}>
-        {/* County / region */}
-        <p style={{
-          fontFamily: 'var(--font-mono)', fontSize: 9,
-          letterSpacing: '0.25em', textTransform: 'uppercase',
-          color: 'var(--gold)', fontWeight: 700, marginBottom: 8,
-        }}>
-          {site.county} County · {site.region} WA
-        </p>
-
-        {/* Site name */}
-        <h3 style={{
-          fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 700,
-          color: 'var(--text)', lineHeight: 1.05,
-          letterSpacing: '-0.02em', marginBottom: 6,
-        }}>
-          {site.name}
-        </h3>
-
-        {/* Type + manager */}
-        <p style={{
-          fontFamily: 'var(--font-display)', fontStyle: 'italic',
-          fontSize: 13, color: 'var(--text-3)', marginBottom: 22,
-        }}>
-          {site.type} · Managed by {site.manager}
-        </p>
-
-        {/* Species chips — outlined style matching mockup */}
-        {site.species?.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 26 }}>
-            {site.species.slice(0, 3).map(sp => (
-              <span key={sp} style={{
-                fontFamily: 'var(--font-mono)', fontSize: 9,
-                letterSpacing: '0.15em', textTransform: 'uppercase',
-                border: '1px solid',
-                borderColor: 'rgba(212,160,23,0.35)',
-                color: 'var(--gold)',
-                padding: '4px 10px',
-              }}>
-                {sp}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Why this site */}
-        <div style={{ marginBottom: 32 }}>
+        {/* Identity */}
+        <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{
             fontFamily: 'var(--font-mono)', fontSize: 9,
-            letterSpacing: '0.2em', textTransform: 'uppercase',
-            color: 'var(--text-3)', fontWeight: 700, marginBottom: 12,
+            letterSpacing: '0.25em', textTransform: 'uppercase',
+            color: 'var(--gold)', fontWeight: 700, marginBottom: 8,
           }}>
-            Why this site
+            {site.county} County · {site.region} WA
           </p>
-          {drivingFeatures.map((f, i) => (
-            <div key={i} style={{
-              display: 'flex', alignItems: 'flex-start',
-              gap: 8, marginBottom: 10, fontSize: 13,
+          <h3 style={{
+            fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 700,
+            color: 'var(--text)', lineHeight: 1.05,
+            letterSpacing: '-0.02em', marginBottom: 6,
+          }}>
+            {site.name}
+          </h3>
+          <p style={{
+            fontFamily: 'var(--font-display)', fontStyle: 'italic',
+            fontSize: 13, color: 'var(--text-3)',
+          }}>
+            {site.type} · Managed by {site.manager}
+          </p>
+        </div>
+      </div>
+
+      {/* Species chips — outlined style matching mockup */}
+      {site.species?.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 26 }}>
+          {site.species.slice(0, 3).map(sp => (
+            <span key={sp} style={{
+              fontFamily: 'var(--font-mono)', fontSize: 9,
+              letterSpacing: '0.15em', textTransform: 'uppercase',
+              border: '1px solid',
+              borderColor: 'rgba(212,160,23,0.35)',
+              color: 'var(--gold)',
+              padding: '4px 10px',
             }}>
-              <span style={{
-                color: 'var(--gold)', flexShrink: 0,
-                fontSize: 9, marginTop: 3, lineHeight: 1,
-              }}>
-                ▶
-              </span>
-              <p style={{ margin: 0, color: 'var(--text)', lineHeight: 1.5 }}>
-                <strong style={{ fontWeight: 600 }}>{f.label}:</strong>{' '}
-                <span style={{ color: 'var(--text-3)', fontStyle: 'italic' }}>{f.detail}</span>
-              </p>
-            </div>
+              {sp}
+            </span>
           ))}
         </div>
+      )}
 
-        {/* CTAs — plain text per mockup */}
-        <div style={{
-          display: 'flex', gap: 32, alignItems: 'center',
-          paddingTop: 20,
-          borderTop: '1px solid rgba(212,160,23,0.12)',
+      {/* Why this site */}
+      <div style={{ marginBottom: 32 }}>
+        <p style={{
+          fontFamily: 'var(--font-mono)', fontSize: 9,
+          letterSpacing: '0.2em', textTransform: 'uppercase',
+          color: 'var(--text-3)', fontWeight: 700, marginBottom: 12,
         }}>
+          Why this site
+        </p>
+        {drivingFeatures.map((f, i) => (
+          <div key={i} style={{
+            display: 'flex', alignItems: 'flex-start',
+            gap: 8, marginBottom: 10, fontSize: 13,
+          }}>
+            <span style={{
+              color: 'var(--gold)', flexShrink: 0,
+              fontSize: 9, marginTop: 3, lineHeight: 1,
+            }}>
+              ▶
+            </span>
+            <p style={{ margin: 0, color: 'var(--text)', lineHeight: 1.5 }}>
+              <strong style={{ fontWeight: 600 }}>{f.label}:</strong>{' '}
+              <span style={{ color: 'var(--text-3)', fontStyle: 'italic' }}>{f.detail}</span>
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* CTAs — plain text per mockup */}
+      <div style={{
+        display: 'flex', gap: 32, alignItems: 'center',
+        paddingTop: 20,
+        borderTop: '1px solid rgba(212,160,23,0.12)',
+      }}>
+        <button
+          onClick={() => onSelect && onSelect(site)}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+            fontFamily: 'var(--font-mono)', fontSize: 10,
+            letterSpacing: '0.2em', textTransform: 'uppercase',
+            fontWeight: 700, color: 'var(--text)',
+            display: 'flex', alignItems: 'center', gap: 4,
+            transition: 'color 160ms',
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--gold)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--text)'}
+        >
+          View Details <ChevronRight size={12} />
+        </button>
+
+        {inTrip ? (
+          <button disabled style={{
+            background: 'none', border: 'none', cursor: 'default', padding: 0,
+            fontFamily: 'var(--font-mono)', fontSize: 10,
+            letterSpacing: '0.2em', textTransform: 'uppercase',
+            fontWeight: 700, color: 'var(--green-bright)',
+            display: 'flex', alignItems: 'center', gap: 4,
+          }}>
+            <Check size={11} /> Added to trip
+          </button>
+        ) : (
           <button
-            onClick={() => onSelect && onSelect(site)}
+            onClick={() => onAddToTrip && onAddToTrip(site)}
             style={{
               background: 'none', border: 'none', cursor: 'pointer', padding: 0,
               fontFamily: 'var(--font-mono)', fontSize: 10,
               letterSpacing: '0.2em', textTransform: 'uppercase',
-              fontWeight: 700, color: 'var(--text)',
+              fontWeight: 700, color: 'var(--gold)',
               display: 'flex', alignItems: 'center', gap: 4,
-              transition: 'color 160ms',
+              transition: 'opacity 160ms',
             }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--gold)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--text)'}
+            onMouseEnter={e => e.currentTarget.style.opacity = '0.7'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
           >
-            View Details <ChevronRight size={12} />
+            <Plus size={11} /> Add to trip
           </button>
-
-          {inTrip ? (
-            <button disabled style={{
-              background: 'none', border: 'none', cursor: 'default', padding: 0,
-              fontFamily: 'var(--font-mono)', fontSize: 10,
-              letterSpacing: '0.2em', textTransform: 'uppercase',
-              fontWeight: 700, color: 'var(--green-bright)',
-              display: 'flex', alignItems: 'center', gap: 4,
-            }}>
-              <Check size={11} /> Added to trip
-            </button>
-          ) : (
-            <button
-              onClick={() => onAddToTrip && onAddToTrip(site)}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                fontFamily: 'var(--font-mono)', fontSize: 10,
-                letterSpacing: '0.2em', textTransform: 'uppercase',
-                fontWeight: 700, color: 'var(--gold)',
-                display: 'flex', alignItems: 'center', gap: 4,
-                transition: 'opacity 160ms',
-              }}
-              onMouseEnter={e => e.currentTarget.style.opacity = '0.7'}
-              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-            >
-              <Plus size={11} /> Add to trip
-            </button>
-          )}
-        </div>
+        )}
       </div>
     </article>
   );
@@ -374,8 +328,6 @@ function RankedSiteCard({ rank, result, inTrip, onSelect, onAddToTrip }) {
 function ExploreCard({ result, inTrip, onSelect, onAddToTrip }) {
   const { site, score, drivingFeatures } = result;
   const [hovered, setHovered] = useState(false);
-  const { photoUrl, loading } = useWikiPhoto(site.name);
-  const photo = photoUrl;
 
   return (
     <article
@@ -386,49 +338,26 @@ function ExploreCard({ result, inTrip, onSelect, onAddToTrip }) {
         position: 'relative', borderRadius: 8, overflow: 'hidden',
         border: '1px solid var(--border)', background: 'var(--surface)',
         boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
-        display: 'grid', gridTemplateColumns: '0.6fr 1fr',
+        padding: '24px 32px',
         cursor: 'pointer',
         transition: 'border-color 200ms, transform 300ms',
         borderColor: hovered ? 'rgba(212,160,23,0.4)' : 'var(--border)',
         transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+        display: 'flex', alignItems: 'center', gap: 24,
       }}
     >
-      <div style={{ position: 'relative', minHeight: 200, overflow: 'hidden' }}>
-        {loading && (
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%)',
-            backgroundSize: '200% 100%',
-            animation: 'shimmer 1.4s infinite',
-          }} />
-        )}
-        {photo ? (
-          <img src={photo} alt={site.name} style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'cover', filter: 'brightness(0.7)',
-            transition: 'transform 700ms cubic-bezier(0.165,0.84,0.44,1)',
-            transform: hovered ? 'scale(1.05)' : 'scale(1)',
-          }} />
-        ) : !loading && (
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'linear-gradient(135deg, #0d1a10 0%, #1a2e1f 50%, #0a1a0d 100%)',
-          }} />
-        )}
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: 'linear-gradient(to right, rgba(0,0,0,0.3), transparent)',
-          pointerEvents: 'none',
-        }} />
-        <div style={{
-          position: 'absolute', top: 20, left: 20,
-          fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700,
-          color: 'var(--text-3)',
-        }}>
-          {score}
-        </div>
+      {/* Score badge */}
+      <div style={{
+        flexShrink: 0,
+        fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700,
+        color: 'var(--text-3)',
+        minWidth: 48, textAlign: 'center',
+      }}>
+        {score}
       </div>
-      <div style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+
+      {/* Content */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 6 }}>
           {site.county} County · {site.region} WA
         </div>
