@@ -3,7 +3,49 @@ import { Sparkles, ArrowLeft, Loader2, MessageCircle, Send, X, AlertTriangle } f
 import { askClaude, buildSystemPrompt } from '../utils/ai';
 import { loadApiKey, saveApiKey } from '../utils/storage';
 
-export default function TripBriefing({ profile, trip, onBack, onRemove }) {
+export default function TripBriefing({ profile, trip, onBack, onRemove, onExplore }) {
+  // ----------------------------------------------------------------------
+  // EMPTY STATE (Renders the design from the image if no trip is active)
+  // ----------------------------------------------------------------------
+  if (!trip || !trip.site) {
+    return (
+      <div className="relative flex-1 flex flex-col items-center justify-center h-full w-full min-h-screen bg-[#111A15] overflow-hidden font-sans">
+        {/* Background Image with Overlay */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center" 
+          style={{ backgroundImage: `url('https://images.unsplash.com/photo-1544485596-f61b697669d6?q=80&w=2070&auto=format&fit=crop')` }}
+        ></div>
+        
+        {/* Gradient Overlay matching your dark green theme */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#111A15] via-[#111A15]/60 to-[#111A15]/40"></div>
+        
+        {/* Center Content */}
+        <div className="relative z-10 flex flex-col items-center text-center px-4 -mt-10">
+          <h1 
+            className="text-5xl md:text-6xl text-white mb-6 drop-shadow-lg tracking-wide" 
+            style={{ fontFamily: '"Playfair Display", serif', fontWeight: 600 }}
+          >
+            No Trip Planned
+          </h1>
+          
+          <button 
+            onClick={onExplore || onBack}
+            className="bg-[#CE9F47] hover:bg-[#D8AE5E] text-black font-semibold text-lg px-8 py-3 rounded-sm mb-6 transition-colors shadow-lg"
+          >
+            Explore Recommendations
+          </button>
+          
+          <p className="text-gray-200 max-w-md leading-relaxed text-sm md:text-base drop-shadow-md">
+            Pick a site from your recommendations to generate a personalized trip briefing with gear and tactics.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ----------------------------------------------------------------------
+  // ACTIVE STATE (Your existing AI logic when a trip is planned)
+  // ----------------------------------------------------------------------
   const [apiKey, setApiKey] = useState('');
   const [tempKey, setTempKey] = useState('');
   const [briefing, setBriefing] = useState('');
